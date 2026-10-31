@@ -40,7 +40,15 @@ jobs:
       - name: Install Linux WebView dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Download and verify bundled dependencies
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ASSET_DIR: internal/deps/assets/${{ matrix.goos }}-${{ matrix.goarch }}
+        run: bash .github/scripts/prepare-assets.sh
       - name: Build archive
+        shell: bash
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -52,7 +60,9 @@ jobs:
           mkdir -p "dist/${name}"
           binary="ytaudio"
           if [ "$GOOS" = "windows" ]; then binary="ytaudio.exe"; fi
-          go build -tags desktop -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${name}/${binary}" ./cmd/ytaudio
+          tags="desktop production"
+          if [ "$GOOS" = "linux" ]; then tags="$tags webkit2_41"; fi
+          go build -tags "$tags" -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${name}/${binary}" ./cmd/ytaudio
           cp README.md LICENSE SECURITY.md "dist/${name}/"
           tar -C dist -czf "dist/${name}.tar.gz" "${name}"
       - uses: actions/upload-artifact@v4

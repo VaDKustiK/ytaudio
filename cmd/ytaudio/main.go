@@ -42,7 +42,7 @@ func main() {
 	defer listener.Close()
 
 	appURL := fmt.Sprintf("http://127.0.0.1:%d/", port)
-	srv := server.New(cfg, appURL)
+	srv := server.New(cfg, appURL, version)
 	defer srv.Close()
 	httpServer := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 

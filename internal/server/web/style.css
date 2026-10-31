@@ -13,6 +13,7 @@ h1 { margin-bottom: .25rem; }
 code { overflow-wrap: anywhere; }
 button { margin: .25rem .4rem .25rem 0; padding: .55rem .8rem; cursor: pointer; }
 .diagnostics { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.clipboard-helper { position: fixed; opacity: 0; pointer-events: none; }
 input, select { display: block; width: 100%; box-sizing: border-box; margin: .4rem 0 1rem; padding: .6rem; }
 label { display: block; font-weight: 600; }
 li { margin: .4rem 0; overflow-wrap: anywhere; }

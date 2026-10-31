@@ -16,10 +16,12 @@ coverage.*
 # Bundled local dependency payloads
 /internal/deps/assets/*
 !/internal/deps/assets/.keep
+!/internal/deps/assets/placeholder.txt
 
 # Local configuration and caches
 .env
 .DS_Store
-.vscode/
+!.vscode/
+!.vscode/settings.json
 .idea/
 *.log

@@ -1,0 +1,7 @@
+{
+  "gopls": {
+    "buildFlags": [
+      "-tags=desktop production webkit2_41"
+    ]
+  }
+}

@@ -12,6 +12,12 @@
   <main>
     <h1>ytaudio</h1>
     <p class="muted">A private, local YouTube audio downloader.</p>
+    <section class="card" aria-labelledby="update-title">
+      <h2 id="update-title">Application updates</h2>
+      <p id="update-message" role="status" aria-live="polite">Checking for updates...</p>
+      <a id="update-link" hidden target="_blank" rel="noreferrer">View release</a>
+      <button id="update-button" type="button">Check for updates</button>
+    </section>
     <section class="card" aria-labelledby="setup-title">
       <h2 id="setup-title">Setup</h2>
       <p id="setup-message" role="status" aria-live="polite">Checking dependencies...</p>
@@ -29,10 +35,10 @@
         <input id="url" name="url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
         <label for="format">Format</label>
         <select id="format" name="format">
-          <option value="original">Original (best, no re-encode)</option>
           <option value="mp3">MP3</option>
-          <option value="m4a">M4A</option>
-          <option value="opus">Opus</option>
+          <option value="wav">WAV (lossless conversion)</option>
+          <option value="flac">FLAC (lossless conversion)</option>
+          <option value="mp4">MP4 video</option>
         </select>
         <button type="submit">Download</button>
       </form>
@@ -45,7 +51,7 @@
     <section class="card" aria-labelledby="diagnostics-title">
       <h2 id="diagnostics-title">Diagnostics</h2>
       <pre id="diagnostics" class="diagnostics">Loading...</pre>
-      <button id="refresh-button" type="button">Check for updates</button>
+      <button id="refresh-button" type="button">Refresh diagnostics</button>
       <button id="copy-button" type="button">Copy diagnostics</button>
     </section>
     <section class="card" aria-labelledby="history-title">

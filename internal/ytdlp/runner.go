@@ -17,10 +17,10 @@ import (
 type Format string
 
 const (
-	Original Format = "original"
-	MP3      Format = "mp3"
-	M4A      Format = "m4a"
-	Opus     Format = "opus"
+	MP3  Format = "mp3"
+	WAV  Format = "wav"
+	FLAC Format = "flac"
+	MP4  Format = "mp4"
 )
 
 type Progress struct {
@@ -56,21 +56,20 @@ func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist 
 	if outputFolder == "" || filepath.IsAbs(outputFolder) == false {
 		return nil, fmt.Errorf("output folder must be an absolute path")
 	}
-	args := []string{"--newline", "--progress", "--progress-template", "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta)s", "--js-runtimes", "deno", "--embed-metadata", "--embed-thumbnail", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
+	tempFolder := filepath.Join(outputFolder, ".ytaudio-temp")
+	args := []string{"--newline", "--progress", "--progress-template", "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta)s", "--progress-delta", "0.5", "--no-overwrites", "--no-keep-video", "--paths", "temp:" + tempFolder, "--js-runtimes", "deno", "--embed-metadata", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
 	if playlist {
 		args = append(args, "--playlist-end", "100")
 	} else {
 		args = append(args, "--no-playlist")
 	}
 	switch format {
-	case Original:
-		args = append(args, "-f", "bestaudio")
 	case MP3:
 		args = append(args, "-x", "--audio-format", "mp3", "--audio-quality", "0")
-	case M4A:
-		args = append(args, "-x", "--audio-format", "m4a", "--audio-quality", "0")
-	case Opus:
-		args = append(args, "-x", "--audio-format", "opus", "--audio-quality", "0")
+	case WAV, FLAC:
+		args = append(args, "-x", "--audio-format", string(format), "--audio-quality", "0")
+	case MP4:
+		args = append(args, "-f", "bv*+ba/b", "--merge-output-format", "mp4")
 	default:
 		return nil, fmt.Errorf("unsupported format %q", format)
 	}
@@ -78,13 +77,16 @@ func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist 
 	return args, nil
 }
 
-var progressPattern = regexp.MustCompile(`^download:(\d+(?:\.\d+)?)%?\|([^|]*)\|([^|]*)$`)
+var progressPattern = regexp.MustCompile(`^download:\s*(\d+(?:\.\d+)?)%?\s*\|\s*([^|]*)\s*\|\s*(.*)$`)
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 func ParseProgress(line string) (Progress, bool) {
-	matches := progressPattern.FindStringSubmatch(strings.TrimSpace(line))
+	line = strings.TrimSpace(ansiPattern.ReplaceAllString(line, ""))
+	matches := progressPattern.FindStringSubmatch(line)
 	if matches == nil {
 		return Progress{}, false
 	}
+
 	percent, err := strconv.ParseFloat(strings.TrimSuffix(matches[1], "%"), 64)
 	if err != nil {
 		return Progress{}, false

@@ -20,6 +20,7 @@ import (
 	"github.com/VaDKustiK/ytaudio/internal/config"
 	"github.com/VaDKustiK/ytaudio/internal/deps"
 	"github.com/VaDKustiK/ytaudio/internal/queue"
+	"github.com/VaDKustiK/ytaudio/internal/update"
 	"github.com/VaDKustiK/ytaudio/internal/urlcheck"
 	"github.com/VaDKustiK/ytaudio/internal/ytdlp"
 )
@@ -37,6 +38,7 @@ type Server struct {
 	jobs    map[string]*downloadJob
 	queue   *queue.Queue
 	history []HistoryItem
+	version string
 }
 
 type ConfigView struct {
@@ -44,7 +46,7 @@ type ConfigView struct {
 	Format       string
 }
 
-func New(cfg config.Config, appURL string) *Server {
+func New(cfg config.Config, appURL, version string) *Server {
 	manager, managerErr := deps.New(cfg.Proxy)
 	setup := SetupState{}
 	if managerErr != nil {
@@ -52,13 +54,14 @@ func New(cfg config.Config, appURL string) *Server {
 	}
 
 	return &Server{
-		config: ConfigView{OutputFolder: cfg.OutputFolder, Format: cfg.Format},
-		appURL: appURL,
-		token:  newToken(),
-		deps:   manager,
-		setup:  setup,
-		jobs:   make(map[string]*downloadJob),
-		queue:  queue.New(cfg.DailyCap),
+		config:  ConfigView{OutputFolder: cfg.OutputFolder, Format: cfg.Format},
+		appURL:  appURL,
+		token:   newToken(),
+		deps:    manager,
+		setup:   setup,
+		jobs:    make(map[string]*downloadJob),
+		queue:   queue.New(cfg.DailyCap),
+		version: version,
 	}
 }
 
@@ -69,6 +72,14 @@ func (s *Server) Close() {
 }
 
 func (s *Server) Handler() http.Handler {
+	return s.handler(true)
+}
+
+func (s *Server) DesktopHandler() http.Handler {
+	return s.handler(false)
+}
+
+func (s *Server) handler(secure bool) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.index)
 	staticFiles, err := fs.Sub(webFiles, "web")
@@ -83,7 +94,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/download", s.startDownload)
 	mux.HandleFunc("/api/jobs/", s.jobEvents)
 	mux.HandleFunc("/api/history", s.historyHandler)
-	return securityMiddleware(s.appURL, s.token, mux)
+	mux.HandleFunc("/api/app-update", s.updateHandler)
+	if secure {
+		return securityMiddleware(s.appURL, s.token, mux)
+	}
+	return mux
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +207,7 @@ type downloadJob struct {
 	Cancel context.CancelFunc
 	Error  string
 	Queued bool
+	Latest *ytdlp.Progress
 }
 
 type HistoryItem struct {
@@ -257,6 +273,9 @@ func (s *Server) runDownload(ctx context.Context, job *downloadJob, executable, 
 	args, err := ytdlp.BuildArgsWithPlaylist(rawURL, s.config.OutputFolder, format, playlist)
 	if err == nil {
 		err = (ytdlp.Runner{Executable: executable}).Run(ctx, args, func(progress ytdlp.Progress) {
+			s.mu.Lock()
+			job.Latest = &progress
+			s.mu.Unlock()
 			select {
 			case job.Events <- progress:
 			default:
@@ -266,6 +285,9 @@ func (s *Server) runDownload(ctx context.Context, job *downloadJob, executable, 
 			_ = s.deps.Update(ctx)
 			if updated, pathErr := s.deps.YTDLPPath(); pathErr == nil {
 				err = (ytdlp.Runner{Executable: updated}).Run(ctx, args, func(progress ytdlp.Progress) {
+					s.mu.Lock()
+					job.Latest = &progress
+					s.mu.Unlock()
 					select {
 					case job.Events <- progress:
 					default:
@@ -312,12 +334,19 @@ func (s *Server) jobEvents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Streaming is unavailable.", http.StatusInternalServerError)
 		return
 	}
+	s.mu.RLock()
+	latest := job.Latest
+	s.mu.RUnlock()
+	if latest != nil {
+		data, _ := json.Marshal(latest)
+		fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
+		flusher.Flush()
+	}
 	for progress := range job.Events {
 		data, _ := json.Marshal(progress)
 		fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
 		flusher.Flush()
 	}
-
 	if job.Error != "" {
 		data, _ := json.Marshal(map[string]string{"error": job.Error})
 		fmt.Fprintf(w, "event: error\ndata: %s\n\n", data)
@@ -335,6 +364,10 @@ func (s *Server) historyHandler(w http.ResponseWriter, _ *http.Request) {
 		history = []HistoryItem{}
 	}
 	writeJSON(w, history)
+}
+
+func (s *Server) updateHandler(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, update.Check(r.Context(), s.version))
 }
 
 func writeJSON(w http.ResponseWriter, value any) {

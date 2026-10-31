@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		log.Printf("config: %v", err)
 	}
-	app := server.New(cfg, "http://wails.localhost/")
+	app := server.New(cfg, "http://wails.localhost/", version)
 	defer app.Close()
 	if err := wails.Run(&options.App{
 		Title:       "ytaudio",
@@ -35,7 +35,7 @@ func main() {
 		Height:      800,
 		MinWidth:    760,
 		MinHeight:   600,
-		AssetServer: &assetserver.Options{Handler: app.Handler()},
+		AssetServer: &assetserver.Options{Handler: app.DesktopHandler()},
 	}); err != nil {
 		log.Fatal(err)
 	}

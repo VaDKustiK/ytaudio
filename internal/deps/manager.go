@@ -98,8 +98,11 @@ func (m *Manager) Status(ctx context.Context) []Status {
 	ffmpeg := Status{Name: "ffmpeg"}
 	if err == nil {
 		ffmpeg.Path = ffmpegPath
-		ffmpeg.Version = commandVersion(ctx, ffmpegPath)
+		ffmpeg.Version = commandVersionWithArgs(ctx, ffmpegPath, "-version")
 		ffmpeg.Ready = ffmpeg.Version != ""
+		if !ffmpeg.Ready {
+			ffmpeg.Error = "ffmpeg could not be executed"
+		}
 	} else {
 		ffmpeg.Error = "ffmpeg is not installed"
 	}
@@ -152,8 +155,14 @@ func (m *Manager) Setup(ctx context.Context, progress func(Progress)) error {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return fmt.Errorf("ffmpeg is not installed; install ffmpeg or place it on PATH")
 	}
+	if version := commandVersionWithArgs(ctx, "ffmpeg", "-version"); version == "" {
+		return fmt.Errorf("ffmpeg was found but could not be executed")
+	}
 	if _, err := exec.LookPath("deno"); err != nil {
 		return fmt.Errorf("Deno 2.3 or newer is required for YouTube extraction; install Deno and retry setup")
+	}
+	if version := commandVersionWithArgs(ctx, "deno", "--version"); version == "" {
+		return fmt.Errorf("Deno was found but could not be executed")
 	}
 	return nil
 }
@@ -289,9 +298,13 @@ func replaceWithFallback(tempName, target string) error {
 }
 
 func commandVersion(ctx context.Context, path string) string {
+	return commandVersionWithArgs(ctx, path, "--version")
+}
+
+func commandVersionWithArgs(ctx context.Context, path string, args ...string) string {
 	versionCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(versionCtx, path, "--version").Output()
+	output, err := exec.CommandContext(versionCtx, path, args...).CombinedOutput()
 	if err != nil {
 		return ""
 	}

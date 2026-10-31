@@ -9,6 +9,8 @@ const downloadMessage = document.querySelector("#download-message");
 const downloadProgress = document.querySelector("#download-progress");
 const cancelButton = document.querySelector("#cancel-button");
 const historyList = document.querySelector("#history");
+const updateMessage = document.querySelector("#update-message");
+const updateLink = document.querySelector("#update-link");
 let activeJob;
 let events;
 
@@ -51,8 +53,33 @@ async function refresh() {
         historyList.append(entry);
       });
     }
+
   } catch (error) {
     setupMessage.textContent = error.message;
+  }
+}
+
+async function checkApplicationUpdate() {
+  updateMessage.textContent = "Checking for updates...";
+  updateLink.hidden = true;
+  try {
+    const response = await fetch("/api/app-update");
+    if (!response.ok) throw new Error("Unable to check for application updates.");
+    const data = await response.json();
+    if (data.error) {
+      updateMessage.textContent = data.error;
+      return;
+    }
+    if (data.ready) {
+      updateMessage.textContent = `Version ${data.latest} is available.`;
+      updateLink.href = data.url;
+      updateLink.textContent = "View release";
+      updateLink.hidden = false;
+    } else {
+      updateMessage.textContent = "You are using the latest available version.";
+    }
+  } catch (error) {
+    updateMessage.textContent = error.message;
   }
 }
 
@@ -66,15 +93,32 @@ setupButton.addEventListener("click", async () => {
     });
     if (!response.ok) throw new Error(await response.text());
     await refresh();
+    while (setupButton.disabled) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await refresh();
+    }
   } catch (error) {
     setupMessage.textContent = error.message || "Unable to start dependency setup.";
     setupButton.disabled = false;
   }
 });
 document.querySelector("#refresh-button").addEventListener("click", refresh);
+document.querySelector("#update-button").addEventListener("click", checkApplicationUpdate);
 document.querySelector("#copy-button").addEventListener("click", async () => {
   try {
-    await navigator.clipboard.writeText(diagnostics.textContent);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(diagnostics.textContent);
+    } else {
+      const field = document.createElement("textarea");
+      field.value = diagnostics.textContent;
+      field.setAttribute("readonly", "");
+      field.className = "clipboard-helper";
+      document.body.append(field);
+      field.select();
+      if (!document.execCommand("copy")) throw new Error("copy command failed");
+      field.remove();
+    }
+    setupMessage.textContent = "Diagnostics copied.";
   } catch {
     setupMessage.textContent = "Clipboard access is unavailable.";
   }
@@ -125,4 +169,5 @@ function finish(message) {
   activeJob = undefined;
 }
 refresh();
+checkApplicationUpdate();
 setInterval(refresh, 2000);

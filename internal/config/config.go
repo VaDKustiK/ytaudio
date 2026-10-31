@@ -24,7 +24,7 @@ func Defaults() Config {
 	}
 	return Config{
 		OutputFolder: filepath.Join(home, "Downloads"),
-		Format:       "original",
+		Format:       "mp3",
 		DailyCap:     30,
 		Port:         DefaultPort,
 	}
@@ -56,7 +56,7 @@ func (c Config) Validate() error {
 	if c.OutputFolder == "" {
 		return fmt.Errorf("output folder is required")
 	}
-	if c.Format != "original" && c.Format != "mp3" && c.Format != "m4a" && c.Format != "opus" {
+	if c.Format != "mp3" && c.Format != "wav" && c.Format != "flac" && c.Format != "mp4" {
 		return fmt.Errorf("unsupported format %q", c.Format)
 	}
 	if c.DailyCap < 1 {

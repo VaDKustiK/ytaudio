@@ -5,10 +5,10 @@ Local, private YouTube audio downloader. It runs in a native desktop window and 
 ## Run
 
 ```sh
-go run -tags desktop ./cmd/ytaudio
+go run -tags 'desktop production webkit2_41' ./cmd/ytaudio
 ```
 
-The desktop app opens a native Wails window. On Linux, install WebKitGTK development/runtime packages first. The app binds its internal handler to the local Wails window. It downloads yt-dlp from its official GitHub release and verifies its SHA256 checksum. Install `ffmpeg` and Deno 2.3+ with your OS package manager or the official [Deno installer](https://docs.deno.com/runtime/getting_started/installation/) before setup. Deno is required by current yt-dlp YouTube extraction.
+The desktop app opens a native Wails window. On Linux, install GTK/WebKitGTK development packages before building locally (`libgtk-3-dev` and `libwebkit2gtk-4.1-dev` on Debian 13). Release builds embed verified yt-dlp, Deno, and FFmpeg assets where official checksums are available; development/browser builds can use tools installed on `PATH`. Deno 2.3+ is required by current yt-dlp YouTube extraction.
 
 Browser fallback:
 
@@ -16,7 +16,7 @@ Browser fallback:
 go run ./cmd/ytaudio
 ```
 
-Release packaging is being migrated to embed verified yt-dlp, Deno, and FFmpeg assets and extract them into the private user cache on first launch.
+The application checks the public GitHub Releases page for newer versions and links to the release when one is available. It does not silently replace or restart itself.
 
 The first yt-dlp download is large and may take a few minutes on a slow connection. Setup reports errors after 10 minutes.
 

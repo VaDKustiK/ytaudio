@@ -14,6 +14,20 @@ func TestBuildArgsUsesSafeArgumentBoundary(t *testing.T) {
 		t.Fatalf("URL boundary missing: %#v", args)
 	}
 	for _, arg := range args {
+		if arg == "--embed-thumbnail" {
+			t.Fatal("thumbnail embedding must remain disabled")
+		}
+	}
+	foundTempPath := false
+	for index, arg := range args {
+		if arg == "--paths" && index+1 < len(args) && strings.HasPrefix(args[index+1], "temp:/tmp/music/") {
+			foundTempPath = true
+		}
+	}
+	if !foundTempPath {
+		t.Fatalf("temporary path missing: %#v", args)
+	}
+	for _, arg := range args {
 		if strings.Contains(arg, "--audio-format mp3") {
 			t.Fatal("flags were concatenated")
 		}
@@ -31,6 +45,16 @@ func TestBuildArgsUsesSafeArgumentBoundary(t *testing.T) {
 
 func TestParseProgress(t *testing.T) {
 	got, ok := ParseProgress("download:42.5%|1.2MiB/s|00:10")
+	if !ok {
+		t.Fatal("expected progress line")
+	}
+	if got.Percent != 42.5 || got.Speed != "1.2MiB/s" || got.ETA != "00:10" {
+		t.Fatalf("progress = %#v", got)
+	}
+}
+
+func TestParseProgressAcceptsYTDLPSpacing(t *testing.T) {
+	got, ok := ParseProgress("download:  42.5%| 1.2MiB/s | 00:10 ")
 	if !ok {
 		t.Fatal("expected progress line")
 	}
