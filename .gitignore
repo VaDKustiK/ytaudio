@@ -1,0 +1,25 @@
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+/ytaudio
+
+# Build output
+/dist/
+/build/
+/release/
+
+# Bundled local dependency payloads
+/internal/deps/assets/*
+!/internal/deps/assets/.keep
+
+# Local configuration and caches
+.env
+.DS_Store
+.vscode/
+.idea/
+*.log

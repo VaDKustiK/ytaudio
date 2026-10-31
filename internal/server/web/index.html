@@ -1,0 +1,60 @@
+{{define "index"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="ytaudio-token" content="{{.Token}}">
+  <title>ytaudio</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main>
+    <h1>ytaudio</h1>
+    <p class="muted">A private, local YouTube audio downloader.</p>
+    <section class="card" aria-labelledby="setup-title">
+      <h2 id="setup-title">Setup</h2>
+      <p id="setup-message" role="status" aria-live="polite">Checking dependencies...</p>
+      <button id="setup-button" type="button">Set up dependencies</button>
+      <label for="setup-progress">Setup progress</label>
+      <progress id="setup-progress" max="100" value="0"></progress>
+      <p id="setup-details" class="muted small"></p>
+      <p class="muted">Output folder: <code>{{.OutputFolder}}</code></p>
+      <p class="muted">Default format: {{.Format}}</p>
+    </section>
+    <section class="card" aria-labelledby="download-title">
+      <h2 id="download-title">Download audio</h2>
+      <form id="download-form">
+        <label for="url">YouTube URL</label>
+        <input id="url" name="url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
+        <label for="format">Format</label>
+        <select id="format" name="format">
+          <option value="original">Original (best, no re-encode)</option>
+          <option value="mp3">MP3</option>
+          <option value="m4a">M4A</option>
+          <option value="opus">Opus</option>
+        </select>
+        <button type="submit">Download</button>
+      </form>
+      <p class="muted small">YouTube audio is already lossy; converting to lossless would only make files bigger.</p>
+      <p id="download-message" role="status" aria-live="polite"></p>
+      <label for="download-progress">Download progress</label>
+      <progress id="download-progress" max="100" value="0" hidden></progress>
+      <button id="cancel-button" type="button" hidden>Cancel</button>
+    </section>
+    <section class="card" aria-labelledby="diagnostics-title">
+      <h2 id="diagnostics-title">Diagnostics</h2>
+      <pre id="diagnostics" class="diagnostics">Loading...</pre>
+      <button id="refresh-button" type="button">Check for updates</button>
+      <button id="copy-button" type="button">Copy diagnostics</button>
+    </section>
+    <section class="card" aria-labelledby="history-title">
+      <h2 id="history-title">History</h2>
+      <ul id="history"><li class="muted">No completed downloads.</li></ul>
+    </section>
+    <p class="muted small">This page is served only from your computer.</p>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
+{{end}}

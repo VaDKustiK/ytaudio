@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            runner: windows-2022
+          - goos: windows
+            goarch: arm64
+            runner: windows-2022
+          - goos: darwin
+            goarch: amd64
+            runner: macos-14
+          - goos: darwin
+            goarch: arm64
+            runner: macos-14
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+      - name: Install Linux WebView dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Build archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          name="ytaudio-${VERSION#v}-${GOOS}-${GOARCH}"
+          mkdir -p "dist/${name}"
+          binary="ytaudio"
+          if [ "$GOOS" = "windows" ]; then binary="ytaudio.exe"; fi
+          go build -tags desktop -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "dist/${name}/${binary}" ./cmd/ytaudio
+          cp README.md LICENSE SECURITY.md "dist/${name}/"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ytaudio-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.tar.gz
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: ytaudio-*
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum dist/*.tar.gz > dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
