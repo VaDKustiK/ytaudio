@@ -31,7 +31,7 @@
 <form id="download-form" class="panel download-panel">
 <label for="url">YouTube link</label><div class="url-field"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><input id="url" name="url" type="url" required autocomplete="off" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="link-help"></div>
 <p id="link-help" class="field-help">Videos and playlists. One download at a time.</p>
-<div class="format-row"><div><label for="format">Audio format</label><select id="format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="mp4">MP4 · audio only</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select></div><p id="format-help" class="format-help"></p></div>
+<div class="format-row"><div><label for="format">Audio format</label><select id="format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select></div><p id="format-help" class="format-help"></p></div>
 <div class="destination"><div><span class="small muted">Save to</span><p id="destination">Loading settings…</p></div><button type="button" class="text-button" data-goto="settings">Change</button></div>
 <div class="form-bottom"><span class="quality-note">Always starts with the best available YouTube audio.</span><button id="download-button" class="primary" type="submit">Download audio <span aria-hidden="true">↓</span></button></div>
 <p id="download-message" class="feedback" role="status" aria-live="polite"></p>
@@ -44,7 +44,7 @@
 <div class="page-heading"><p class="eyebrow">A LITTLE MORE PERSONAL</p><h1 id="settings-heading">Your preferences.</h1><p class="lead">Set it once. Get on with listening.</p></div>
 <form id="settings-form" class="panel settings-panel">
 <label for="output-folder">Download folder</label><div class="input-with-button"><input id="output-folder" name="output_folder" required spellcheck="false"><button id="choose-folder" type="button" class="secondary">Choose…</button></div><p class="field-help">Choose an existing folder where you can save files.</p>
-<label for="default-format">Default format</label><select id="default-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="mp4">MP4 · audio only</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
+<label for="default-format">Default format</label><select id="default-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
 <details><summary>Connection &amp; queue</summary><label for="proxy">Proxy URL <span class="muted">(optional)</span></label><input id="proxy" name="proxy" type="password" autocomplete="off" placeholder="http://127.0.0.1:8080"><p class="field-help">Used for downloads, tool setup, and release checks. Leave blank for your normal connection.</p><label for="daily-cap">Download jobs per session</label><input id="daily-cap" name="daily_cap" type="number" min="1" max="10000" required><p class="field-help">A playlist is one job, capped at 100 videos.</p></details>
 <div class="form-bottom"><p id="settings-message" class="feedback" role="status" aria-live="polite"></p><button id="save-settings" class="primary" type="submit">Save preferences</button></div>
 </form></section>

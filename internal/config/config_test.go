@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,12 +49,39 @@ func TestConfigValidation(t *testing.T) {
 			t.Fatal(proxy)
 		}
 	}
-	for _, f := range []string{"mp3", "wav", "flac", "mp4", "ogg"} {
+	for _, f := range []string{"mp3", "wav", "flac", "ogg"} {
 		c := Defaults()
 		c.Format = f
 		c.OutputFolder = filepath.Clean(t.TempDir())
 		if err := c.Validate(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestLoadMigratesRemovedMP4WithoutLosingPreferences(t *testing.T) {
+	isolate(t)
+	cfg := Defaults()
+	cfg.Format = "mp4"
+	cfg.OutputFolder = t.TempDir()
+	cfg.Proxy = "http://127.0.0.1:8080"
+	if cfg.Validate() == nil {
+		t.Fatal("removed format accepted")
+	}
+	path, _ := filePath()
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	cfg.Format = "mp3"
+	if err != nil || got != cfg {
+		t.Fatalf("migration lost preferences: %+v %v", got, err)
 	}
 }

@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -69,7 +72,7 @@ func TestRunnerCancelsPromptly(t *testing.T) {
 	}
 }
 func TestAllRequestedFormats(t *testing.T) {
-	for _, format := range []Format{MP3, WAV, FLAC, MP4, OGG} {
+	for _, format := range []Format{MP3, WAV, FLAC, OGG, M4A} {
 		t.Run(string(format), func(t *testing.T) {
 			args, err := BuildArgs("https://youtu.be/abc", t.TempDir(), format)
 			if err != nil {
@@ -79,9 +82,7 @@ func TestAllRequestedFormats(t *testing.T) {
 			if !strings.Contains(joined, "--ignore-config") || !strings.Contains(joined, "--no-plugin-dirs") || !strings.Contains(joined, "bestaudio/best") {
 				t.Fatal(joined)
 			}
-			if format == MP4 && (!strings.Contains(joined, "--remux-video mp4") || strings.Contains(joined, "--audio-format")) {
-				t.Fatal("MP4 must remux without re-encoding")
-			}
+
 		})
 	}
 }
@@ -123,13 +124,34 @@ func TestLocalAudioConversion(t *testing.T) {
 	if output, err := exec.Command(ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:a", "libopus", input).CombinedOutput(); err != nil {
 		t.Fatalf("generate audio: %v %s", err, output)
 	}
-	for _, format := range []Format{MP3, WAV, FLAC, MP4, OGG} {
+	// Metadata advertises artwork, but the downloader must never request it.
+	var thumbnailRequests atomic.Int32
+	artworkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		thumbnailRequests.Add(1)
+		http.Error(w, "artwork should never be requested", http.StatusInternalServerError)
+	}))
+	defer artworkServer.Close()
+	metadata := filepath.Join(t.TempDir(), "source.json")
+	data, err := json.Marshal(map[string]any{
+		"id": "local-audio", "title": "Local artwork regression", "url": "file://" + input,
+		"ext": "webm", "vcodec": "none", "acodec": "opus", "extractor": "generic",
+		"thumbnail": artworkServer.URL + "/cover.jpg",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metadata, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []Format{MP3, WAV, FLAC, OGG, M4A} {
 		t.Run(string(format), func(t *testing.T) {
-			args, err := BuildArgs("https://youtu.be/abc", t.TempDir(), format)
+			folder := t.TempDir()
+			thumbnailRequests.Store(0)
+			args, err := BuildArgs("https://youtu.be/abc", folder, format)
 			if err != nil {
 				t.Fatal(err)
 			}
-			filtered := []string{"--enable-file-urls", "--no-cache-dir"}
+			filtered := []string{"--enable-file-urls", "--no-cache-dir", "--load-info-json", metadata}
 			for i := 0; i < len(args); i++ {
 				if args[i] == "--sleep-requests" || args[i] == "--sleep-interval" || args[i] == "--max-sleep-interval" {
 					i++
@@ -137,7 +159,7 @@ func TestLocalAudioConversion(t *testing.T) {
 				}
 				filtered = append(filtered, args[i])
 			}
-			filtered[len(filtered)-1] = "file://" + input
+			filtered = filtered[:len(filtered)-2]
 			var final string
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -165,10 +187,30 @@ func TestLocalAudioConversion(t *testing.T) {
 			if err = json.Unmarshal(out, &info); err != nil {
 				t.Fatal(err)
 			}
-			expected := map[Format]string{MP3: "mp3", WAV: "pcm_s16le", FLAC: "flac", MP4: "opus", OGG: "vorbis"}[format]
+			expected := map[Format]string{MP3: "mp3", WAV: "pcm_s16le", FLAC: "flac", OGG: "vorbis", M4A: "aac"}[format]
 			if len(info.Streams) != 1 || info.Streams[0].Type != "audio" || info.Streams[0].Codec != expected {
-				t.Fatalf("unexpected audio output %s: %s", format, out)
+				t.Fatalf("expected only the requested audio stream, without embedded artwork: %s", out)
 			}
+			if thumbnailRequests.Load() != 0 {
+				t.Fatal("audio downloads must never fetch artwork")
+			}
+			var files []string
+			err = filepath.WalkDir(folder, func(path string, entry os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !entry.IsDir() {
+					files = append(files, path)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(files) != 1 || files[0] != final {
+				t.Fatalf("destination must contain only the audio file: %v", files)
+			}
+
 		})
 	}
 }
@@ -180,19 +222,22 @@ func TestOversizedStdoutTerminatesProcess(t *testing.T) {
 		t.Fatalf("oversized output hung: %v", err)
 	}
 }
-func TestOutputTemplateEscapesPercentInFolder(t *testing.T) {
+func TestOutputPathPreservesPercentInFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "100% music")
 	args, err := BuildArgs("https://youtu.be/abc", folder, MP3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i, a := range args {
-		if a == "-o" {
-			if !strings.Contains(args[i+1], "100%% music") {
-				t.Fatal(args[i+1])
-			}
-			return
+	foundHome, foundTemplate := false, false
+	for i, arg := range args {
+		if arg == "--paths" && i+1 < len(args) && args[i+1] == "home:"+folder {
+			foundHome = true
+		}
+		if arg == "-o" && i+1 < len(args) && args[i+1] == "%(title)s [%(id)s].%(ext)s" {
+			foundTemplate = true
 		}
 	}
-	t.Fatal("missing output template")
+	if !foundHome || !foundTemplate {
+		t.Fatalf("literal output path and relative template missing: %v", args)
+	}
 }

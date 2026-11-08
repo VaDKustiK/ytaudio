@@ -23,7 +23,6 @@ const (
 	MP3  Format = "mp3"
 	WAV  Format = "wav"
 	FLAC Format = "flac"
-	MP4  Format = "mp4"
 	OGG  Format = "ogg"
 	M4A  Format = "m4a"
 )
@@ -69,7 +68,7 @@ func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist 
 		return nil, fmt.Errorf("output folder must be an absolute path")
 	}
 	tempFolder := filepath.Join(outputFolder, ".ytaudio-temp")
-	args := []string{"--match-filter", "!is_live & !is_upcoming", "--ignore-config", "--no-plugin-dirs", "--no-colors", "--windows-filenames", "--trim-filenames", "180", "--newline", "--progress", "--progress-template", "download:download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s", "--progress-template", "postprocess:postprocess:%(progress.status)s", "--print", "after_move:filepath:%(filepath)j", "--no-simulate", "--progress-delta", "0.5", "--no-overwrites", "--no-keep-video", "--paths", "temp:" + tempFolder, "--js-runtimes", "deno", "--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg", "--socket-timeout", "30", "--retries", "3", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
+	args := []string{"--match-filter", "!is_live & !is_upcoming", "--ignore-config", "--no-plugin-dirs", "--no-colors", "--windows-filenames", "--trim-filenames", "180", "--newline", "--progress", "--progress-template", "download:download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s", "--progress-template", "postprocess:postprocess:%(progress.status)s", "--print", "after_move:filepath:%(filepath)j", "--no-simulate", "--progress-delta", "0.5", "--no-overwrites", "--no-keep-video", "--paths", "home:" + outputFolder, "--paths", "temp:" + tempFolder, "--js-runtimes", "deno", "--embed-metadata", "--no-write-thumbnail", "--no-embed-thumbnail", "--socket-timeout", "30", "--retries", "3", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
 	if playlist {
 		args = append(args, "--playlist-end", "100")
 	} else {
@@ -83,13 +82,10 @@ func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist 
 		args = append(args, "-x", "--audio-format", string(format), "--audio-quality", "0")
 	case OGG:
 		args = append(args, "-x", "--audio-format", "vorbis", "--audio-quality", "0")
-	case MP4:
-		// Remux the best available audio into MP4 without re-encoding.
-		args = append(args, "--remux-video", "mp4")
 	default:
 		return nil, fmt.Errorf("unsupported format %q", format)
 	}
-	args = append(args, "-o", filepath.Join(strings.ReplaceAll(outputFolder, "%", "%%"), "%(title)s [%(id)s].%(ext)s"), "--", rawURL)
+	args = append(args, "-o", "%(title)s [%(id)s].%(ext)s", "--", rawURL)
 	return args, nil
 }
 

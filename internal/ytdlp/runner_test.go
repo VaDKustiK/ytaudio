@@ -71,3 +71,9 @@ func TestConsumeProgressReturnsScannerError(t *testing.T) {
 		t.Fatal("expected scanner error for oversized line")
 	}
 }
+
+func TestRemovedMP4Rejected(t *testing.T) {
+	if _, err := BuildArgs("https://youtu.be/abc", t.TempDir(), Format("mp4")); err == nil {
+		t.Fatal("removed format accepted")
+	}
+}

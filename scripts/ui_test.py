@@ -64,7 +64,8 @@ def test(binary, screenshots):
                 expect(page.locator(".notification-item strong")).to_contain_text("<img")
                 assert page.locator("#notifications img").count()==0
                 page.keyboard.press("Escape");expect(page.locator("#notifications")).to_be_hidden()
-                for format in ("mp3","wav","mp4","flac","ogg"):
+                assert page.locator('#format option[value="mp4"], #default-format option[value="mp4"]').count()==0
+                for format in ("mp3","wav","flac","ogg"):
                     page.select_option("#format",format);assert page.locator("#format-help").inner_text()
                 page.locator('[data-page="settings"]').click()
                 expect(page.locator("#page-settings")).to_be_visible()

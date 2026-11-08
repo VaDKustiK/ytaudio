@@ -7,7 +7,6 @@ const descriptions = {
   mp3: "Best-quality VBR MP3. Plays almost everywhere; converting adds a lossy encoding step.",
   wav: "Uncompressed audio. No further lossy encoding, but much larger files. Does not restore quality YouTube removed.",
   flac: "Lossless encoding of YouTube’s decoded audio. Larger files; no added quality over the YouTube source.",
-  mp4: "Audio-only MP4 container. Keeps the best audio stream without re-encoding; player support depends on its codec.",
   ogg: "High-quality OGG Vorbis audio. A lossy conversion, with broad support in open-source players."
 };
 async function api(path, method = "GET", body) {

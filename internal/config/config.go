@@ -47,6 +47,10 @@ func Load() (Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Defaults(), fmt.Errorf("invalid config, using defaults: %w", err)
 	}
+	// Preserve preferences from versions that offered audio-only MP4.
+	if cfg.Format == "mp4" {
+		cfg.Format = Defaults().Format
+	}
 	if err := cfg.Validate(); err != nil {
 		return Defaults(), fmt.Errorf("invalid config, using defaults: %w", err)
 	}
@@ -57,7 +61,7 @@ func (c Config) Validate() error {
 	if !filepath.IsAbs(c.OutputFolder) {
 		return fmt.Errorf("output folder is required")
 	}
-	if c.Format != "mp3" && c.Format != "wav" && c.Format != "flac" && c.Format != "mp4" && c.Format != "ogg" && c.Format != "m4a" {
+	if c.Format != "mp3" && c.Format != "wav" && c.Format != "flac" && c.Format != "ogg" && c.Format != "m4a" {
 		return fmt.Errorf("unsupported format %q", c.Format)
 	}
 	if c.Proxy != "" {

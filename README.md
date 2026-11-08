@@ -21,13 +21,13 @@ limit is a courtesy control, not a guarantee against YouTube rate limits.
 | MP3 | Best-quality VBR MP3. Broad compatibility; a lossy conversion. |
 | WAV | Uncompressed decoded audio. Large files, no additional lossy codec. |
 | FLAC | Losslessly encodes the decoded audio. Does not restore source quality. |
-| MP4 | Audio-only MP4; remuxes the best available audio without re-encoding. Codec/player compatibility varies. |
 | OGG | Highest-quality Vorbis conversion; another lossy encoding step. |
 
 Every format starts with the best audio available from YouTube. YouTube has
 already compressed the uploader's audio. MP3/OGG conversion cannot promise
-identical quality; WAV/FLAC cannot recover information YouTube removed. Tags and
-cover art are added when supported; cover-art errors have a fallback.
+identical quality; WAV/FLAC cannot recover information YouTube removed. Text
+metadata is added when supported. Artwork is never downloaded or embedded;
+each download saves only the audio file.
 
 **Updates:** the bell lists newer stable GitHub releases. Selecting one opens
 its release page in your browser so you can download the new installer. Updates

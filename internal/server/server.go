@@ -561,16 +561,6 @@ func (s *Server) run(ctx context.Context, job *Job, manager *deps.Manager, execu
 			err = fmt.Errorf("%w; tool update failed: %v", err, updateErr)
 		}
 	}
-	// Cover art support differs by container. Preserve audio if thumbnail embedding fails.
-	if err != nil && ctx.Err() == nil && (strings.Contains(strings.ToLower(err.Error()), "thumbnail") || strings.Contains(strings.ToLower(err.Error()), "cover art")) {
-		fallback := make([]string, 0, len(args))
-		for _, a := range args {
-			if a != "--embed-thumbnail" {
-				fallback = append(fallback, a)
-			}
-		}
-		err = runner.Run(ctx, fallback, report, io.Discard)
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ctx.Err() != nil {
