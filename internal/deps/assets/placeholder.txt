@@ -1,1 +1,1 @@
-Bundled release assets are populated by the release workflow.
+Optional local media-test downloads only. This directory is never embedded or packaged.

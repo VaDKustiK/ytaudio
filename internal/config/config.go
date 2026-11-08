@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 )
@@ -53,13 +54,19 @@ func Load() (Config, error) {
 }
 
 func (c Config) Validate() error {
-	if c.OutputFolder == "" {
+	if !filepath.IsAbs(c.OutputFolder) {
 		return fmt.Errorf("output folder is required")
 	}
-	if c.Format != "mp3" && c.Format != "wav" && c.Format != "flac" && c.Format != "mp4" {
+	if c.Format != "mp3" && c.Format != "wav" && c.Format != "flac" && c.Format != "mp4" && c.Format != "ogg" && c.Format != "m4a" {
 		return fmt.Errorf("unsupported format %q", c.Format)
 	}
-	if c.DailyCap < 1 {
+	if c.Proxy != "" {
+		p, err := url.Parse(c.Proxy)
+		if err != nil || p.Host == "" || (p.Scheme != "http" && p.Scheme != "https" && p.Scheme != "socks5" && p.Scheme != "socks5h") {
+			return fmt.Errorf("proxy must be an http, https, or socks5 URL")
+		}
+	}
+	if c.DailyCap < 1 || c.DailyCap > 10000 {
 		return fmt.Errorf("daily cap must be positive")
 	}
 	if c.Port < 1 || c.Port > 65535 {
@@ -107,7 +114,11 @@ func (c Config) Save() error {
 }
 
 func filePath() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir := os.Getenv("YTAUDIO_CONFIG_DIR")
+	var err error
+	if dir == "" {
+		dir, err = os.UserConfigDir()
+	}
 	if err != nil {
 		return "", fmt.Errorf("find user config directory: %w", err)
 	}

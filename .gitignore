@@ -13,7 +13,7 @@ coverage.*
 /build/
 /release/
 
-# Bundled local dependency payloads
+# Local media-test tools (never embedded or packaged)
 /internal/deps/assets/*
 !/internal/deps/assets/.keep
 !/internal/deps/assets/placeholder.txt
@@ -25,3 +25,7 @@ coverage.*
 !.vscode/settings.json
 .idea/
 *.log
+# Python build/test helpers
+__pycache__/
+*.pyc
+*.syso

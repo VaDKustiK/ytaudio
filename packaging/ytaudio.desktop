@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ytaudio
+Comment=Simple, local YouTube audio downloads
+Exec=ytaudio
+Icon=ytaudio
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupWMClass=ytaudio

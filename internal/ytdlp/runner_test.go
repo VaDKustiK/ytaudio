@@ -1,12 +1,14 @@
 package ytdlp
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestBuildArgsUsesSafeArgumentBoundary(t *testing.T) {
-	args, err := BuildArgs("https://www.youtube.com/watch?v=abc", "/tmp/music", MP3)
+	folder := t.TempDir()
+	args, err := BuildArgs("https://www.youtube.com/watch?v=abc", folder, MP3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -14,13 +16,13 @@ func TestBuildArgsUsesSafeArgumentBoundary(t *testing.T) {
 		t.Fatalf("URL boundary missing: %#v", args)
 	}
 	for _, arg := range args {
-		if arg == "--embed-thumbnail" {
-			t.Fatal("thumbnail embedding must remain disabled")
+		if arg == "--cookies-from-browser" || arg == "--exec" {
+			t.Fatal("unexpected user configuration or shell hook")
 		}
 	}
 	foundTempPath := false
 	for index, arg := range args {
-		if arg == "--paths" && index+1 < len(args) && strings.HasPrefix(args[index+1], "temp:/tmp/music/") {
+		if arg == "--paths" && index+1 < len(args) && args[index+1] == "temp:"+filepath.Join(folder, ".ytaudio-temp") {
 			foundTempPath = true
 		}
 	}

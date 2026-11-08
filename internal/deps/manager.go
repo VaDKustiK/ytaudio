@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,13 +12,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/VaDKustiK/ytaudio/internal/process"
 )
 
 type Manager struct {
 	dir    string
 	client *http.Client
+	mu     sync.Mutex
 }
 
 type Progress struct {
@@ -38,160 +42,168 @@ type Status struct {
 }
 
 func New(proxy string) (*Manager, error) {
-	cache, err := os.UserCacheDir()
+	cache := os.Getenv("YTAUDIO_CACHE_DIR")
+	var err error
+	if cache == "" {
+		cache, err = os.UserCacheDir()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("find user cache directory: %w", err)
 	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if proxy != "" {
-		parsed, err := url.Parse(proxy)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return nil, fmt.Errorf("invalid proxy URL")
-		}
-		transport.Proxy = http.ProxyURL(parsed)
+	client, err := newHTTPClient(proxy)
+	if err != nil {
+		return nil, err
 	}
 	manager := &Manager{
 		dir: filepath.Join(cache, "ytaudio", "bin"),
 		// The setup operation supplies its own overall context timeout. A
 		// short client timeout incorrectly aborts large downloads on slow links.
-		client: &http.Client{Transport: transport},
+		client: client,
 	}
 	if err := os.MkdirAll(manager.dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create dependency directory: %w", err)
 	}
-	if err := installBundled(manager.dir); err != nil {
-		return nil, err
-	}
-	if err := prependPath(manager.dir); err != nil {
-		return nil, err
-	}
 	return manager, nil
 }
 
-func prependPath(dir string) error {
-	pathSeparator := string(os.PathListSeparator)
-	current := os.Getenv("PATH")
-	if current == "" {
-		return os.Setenv("PATH", dir)
+func newHTTPClient(proxy string) (*http.Client, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 30 * time.Second
+	if proxy != "" {
+		parsed, err := url.Parse(proxy)
+		if err != nil || parsed.Host == "" {
+			return nil, fmt.Errorf("invalid proxy URL")
+		}
+		transport.Proxy = http.ProxyURL(parsed)
 	}
-	return os.Setenv("PATH", dir+pathSeparator+current)
+	return &http.Client{Transport: transport}, nil
 }
 
-func (m *Manager) Status(ctx context.Context) []Status {
-	sources, err := Sources()
-	if err != nil {
-		return []Status{{Name: "yt-dlp", Error: err.Error()}}
+func (m *Manager) toolPath(name string) string {
+	path := filepath.Join(m.dir, executableName(name))
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path
 	}
-	statuses := make([]Status, 0, len(sources)+1)
-	for _, source := range sources {
-		path := filepath.Join(m.dir, source.Executable)
-		status := Status{Name: source.Name, Path: path}
-		if info, err := os.Stat(path); err == nil && !info.IsDir() {
-			status.Ready = true
-			status.Version = commandVersion(ctx, path)
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			status.Error = err.Error()
+	path, _ = exec.LookPath(name)
+	return path
+}
+func (m *Manager) Environment() []string {
+	env := os.Environ()
+	for i, v := range env {
+		if strings.HasPrefix(strings.ToUpper(v), "PATH=") {
+			env[i] = "PATH=" + m.dir + string(os.PathListSeparator) + v[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+m.dir)
+}
+func (m *Manager) Status(ctx context.Context) []Status {
+	var statuses []Status
+	for _, name := range []string{"yt-dlp", "ffmpeg", "ffprobe", "deno"} {
+		path := m.toolPath(name)
+		status := Status{Name: name, Path: path}
+		flag := "--version"
+		if name == "ffmpeg" || name == "ffprobe" {
+			flag = "-version"
+		}
+		if path != "" {
+			status.Version = commandVersionWithArgs(ctx, path, flag)
+			status.Ready = status.Version != ""
+		}
+		if name == "yt-dlp" && len(status.Version) >= 10 && status.Version[:10] < "2025.11.12" {
+			status.Ready = false
+			status.Error = "This yt-dlp is too old; run setup to update."
+		}
+		if !status.Ready && status.Error == "" {
+			status.Error = "Not installed or could not start"
 		}
 		statuses = append(statuses, status)
 	}
-	ffmpegPath, err := exec.LookPath("ffmpeg")
-	ffmpeg := Status{Name: "ffmpeg"}
-	if err == nil {
-		ffmpeg.Path = ffmpegPath
-		ffmpeg.Version = commandVersionWithArgs(ctx, ffmpegPath, "-version")
-		ffmpeg.Ready = ffmpeg.Version != ""
-		if !ffmpeg.Ready {
-			ffmpeg.Error = "ffmpeg could not be executed"
-		}
-	} else {
-		ffmpeg.Error = "ffmpeg is not installed"
-	}
-	statuses = append(statuses, ffmpeg)
-	denoPath, err := exec.LookPath("deno")
-	deno := Status{Name: "deno"}
-	if err == nil {
-		deno.Path = denoPath
-		deno.Version = commandVersion(ctx, denoPath)
-		deno.Ready = deno.Version != ""
-	} else {
-		deno.Error = "Deno is not installed"
-	}
-	statuses = append(statuses, deno)
 	return statuses
 }
-
 func (m *Manager) YTDLPPath() (string, error) {
-	sources, err := Sources()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(m.dir, sources[0].Executable)
-	if _, err := os.Stat(path); err != nil {
+	path := m.toolPath("yt-dlp")
+	if path == "" {
 		return "", fmt.Errorf("yt-dlp is not ready")
 	}
 	return path, nil
 }
-
 func (m *Manager) Setup(ctx context.Context, progress func(Progress)) error {
-	sources, err := Sources()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(m.dir, 0o700); err != nil {
-		return fmt.Errorf("create dependency directory: %w", err)
-	}
-	for _, source := range sources {
-		target := filepath.Join(m.dir, source.Executable)
-		if _, err := os.Stat(target); err == nil {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, s := range m.Status(ctx) {
+		if s.Ready {
 			continue
 		}
 		if progress != nil {
-			progress(Progress{Message: "Downloading " + source.Name})
+			progress(Progress{Message: "Installing " + s.Name})
 		}
-		if err := m.downloadVerified(ctx, source, target, progress); err != nil {
-			return fmt.Errorf("%s setup failed: %w", source.Name, err)
+		var err error
+		if s.Name == "yt-dlp" {
+			err = m.updateYTDLP(ctx, progress)
+		} else {
+			err = m.installTool(ctx, s.Name, progress)
+		}
+		if err != nil {
+			return fmt.Errorf("%s setup failed: %w", s.Name, err)
 		}
 	}
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return fmt.Errorf("ffmpeg is not installed; install ffmpeg or place it on PATH")
-	}
-	if version := commandVersionWithArgs(ctx, "ffmpeg", "-version"); version == "" {
-		return fmt.Errorf("ffmpeg was found but could not be executed")
-	}
-	if _, err := exec.LookPath("deno"); err != nil {
-		return fmt.Errorf("Deno 2.3 or newer is required for YouTube extraction; install Deno and retry setup")
-	}
-	if version := commandVersionWithArgs(ctx, "deno", "--version"); version == "" {
-		return fmt.Errorf("Deno was found but could not be executed")
+	for _, s := range m.Status(ctx) {
+		if !s.Ready {
+			return fmt.Errorf("%s could not start after setup", s.Name)
+		}
 	}
 	return nil
 }
-
 func (m *Manager) Update(ctx context.Context) error {
-	sources, err := Sources()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updateYTDLP(ctx, nil)
+}
+func (m *Manager) updateYTDLP(ctx context.Context, progress func(Progress)) error {
+	release, err := m.release(ctx, "yt-dlp/yt-dlp", "")
+	// Checksummed public downloads also work when GitHub's API quota is exhausted.
+	if err != nil {
+		release.Tag = ""
+	}
+	filename, err := ytDLPFilename(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(m.dir, 0o700); err != nil {
+	base := "https://github.com/yt-dlp/yt-dlp/releases/download/" + release.Tag + "/"
+	if release.Tag == "" {
+		base = ytDLPBaseURL
+	}
+	target := filepath.Join(m.dir, executableName("yt-dlp"))
+	if release.Tag != "" && commandVersion(ctx, target) == release.Tag {
+		return nil
+	}
+	if err = m.downloadVerified(ctx, Source{Name: "yt-dlp", URL: base + filename, ChecksumsURL: base + "SHA2-256SUMS", Filename: filename}, target, progress); err != nil {
 		return err
 	}
-	for _, source := range sources {
-		if err := m.downloadVerified(ctx, source, filepath.Join(m.dir, source.Executable), nil); err != nil {
-			return err
-		}
+	if commandVersion(ctx, target) == "" {
+		os.Remove(target)
+		os.Rename(target+".previous", target)
+		return fmt.Errorf("new yt-dlp could not start; previous version restored")
 	}
 	return nil
 }
 
 func (m *Manager) downloadVerified(ctx context.Context, source Source, target string, progress func(Progress)) error {
-	checksumBody, _, err := m.fetch(ctx, source.ChecksumsURL)
-	if err != nil {
-		return fmt.Errorf("download checksum list: %w", err)
+	expected := source.SHA256
+	if expected == "" {
+		checksumBody, _, err := m.fetch(ctx, source.ChecksumsURL)
+		if err != nil {
+			return fmt.Errorf("download checksum list: %w", err)
+		}
+		expected, err = checksumFor(io.LimitReader(checksumBody, 4<<20), source.Filename)
+		checksumBody.Close()
+		if err != nil {
+			return err
+		}
 	}
-	defer checksumBody.Close()
-	expected, err := checksumFor(checksumBody, source.Filename)
-	if err != nil {
-		return err
+	if decoded, err := hex.DecodeString(expected); err != nil || len(decoded) != sha256.Size {
+		return fmt.Errorf("invalid SHA-256 checksum")
 	}
 	body, total, err := m.fetch(ctx, source.URL)
 	if err != nil {
@@ -253,6 +265,7 @@ func (m *Manager) fetch(ctx context.Context, rawURL string) (io.ReadCloser, int6
 	if err != nil {
 		return nil, 0, err
 	}
+	request.Header.Set("User-Agent", "ytaudio")
 	response, err := m.client.Do(request)
 	if err != nil {
 		return nil, 0, err
@@ -284,6 +297,9 @@ func checksumFor(data io.Reader, filename string) (string, error) {
 func replaceWithFallback(tempName, target string) error {
 	backup := target + ".previous"
 	if _, err := os.Stat(target); err == nil {
+		if err := os.Remove(backup); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		if err := os.Rename(target, backup); err != nil {
 			return fmt.Errorf("preserve previous binary: %w", err)
 		}
@@ -304,9 +320,47 @@ func commandVersion(ctx context.Context, path string) string {
 func commandVersionWithArgs(ctx context.Context, path string, args ...string) string {
 	versionCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(versionCtx, path, args...).CombinedOutput()
+	output, err := process.Command(versionCtx, path, args...).CombinedOutput()
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(output))
+	return strings.SplitN(strings.TrimSpace(string(output)), "\n", 2)[0]
+}
+
+// CheckDaily compares the installed extraction engine with the current release.
+// It never replaces a running tool. The caller schedules Update when idle.
+func (m *Manager) CheckDaily(ctx context.Context) (bool, error) {
+	marker := filepath.Join(m.dir, ".last-update-check")
+	if data, err := os.ReadFile(marker); err == nil {
+		if last, err := time.Parse(time.RFC3339, string(data)); err == nil && time.Since(last) < 24*time.Hour {
+			return false, nil
+		}
+	}
+	release, err := m.release(ctx, "yt-dlp/yt-dlp", "")
+	if err != nil {
+		return false, err
+	}
+	temp, err := os.CreateTemp(m.dir, ".check-*")
+	if err != nil {
+		return false, err
+	}
+	name := temp.Name()
+	defer os.Remove(name)
+	_, err = temp.WriteString(time.Now().UTC().Format(time.RFC3339))
+	closeErr := temp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return false, err
+	}
+	if err = os.Rename(name, marker); err != nil {
+		return false, err
+	}
+	path := m.toolPath("yt-dlp")
+	if path == "" {
+		return false, nil
+	}
+	version := commandVersion(ctx, path)
+	return version != "" && version < release.Tag, nil
 }

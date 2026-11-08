@@ -17,6 +17,7 @@ type Source struct {
 	URL          string
 	ChecksumsURL string
 	Filename     string
+	SHA256       string
 	Executable   string
 }
 

@@ -93,3 +93,39 @@ func TestYTDLPFilenameUsesUniversalMacOSAsset(t *testing.T) {
 		}
 	}
 }
+
+func TestChecksumMismatchPreservesWorkingBinary(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "tampered") }))
+	defer server.Close()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "binary")
+	os.WriteFile(target, []byte("working"), 0700)
+	m := &Manager{dir: dir, client: server.Client()}
+	err := m.downloadVerified(context.Background(), Source{Name: "test", URL: server.URL, SHA256: strings.Repeat("0", 64)}, target, nil)
+	if err == nil {
+		t.Fatal("accepted invalid checksum")
+	}
+	data, _ := os.ReadFile(target)
+	if string(data) != "working" {
+		t.Fatal("destroyed working binary")
+	}
+}
+func TestRepeatedReplaceAndRollback(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "tool")
+	os.WriteFile(target, []byte("old"), 0700)
+	for _, value := range []string{"one", "two"} {
+		p := filepath.Join(dir, "temp")
+		os.WriteFile(p, []byte(value), 0700)
+		if err := replaceWithFallback(p, target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := replaceWithFallback(filepath.Join(dir, "missing"), target); err == nil {
+		t.Fatal("missing update succeeded")
+	}
+	data, _ := os.ReadFile(target)
+	if string(data) != "two" {
+		t.Fatalf("rollback lost tool: %s", data)
+	}
+}

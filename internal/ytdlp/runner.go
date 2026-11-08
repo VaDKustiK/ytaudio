@@ -2,16 +2,19 @@ package ytdlp
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+
+	"github.com/VaDKustiK/ytaudio/internal/process"
+	"github.com/VaDKustiK/ytaudio/internal/urlcheck"
 )
 
 type Format string
@@ -21,6 +24,8 @@ const (
 	WAV  Format = "wav"
 	FLAC Format = "flac"
 	MP4  Format = "mp4"
+	OGG  Format = "ogg"
+	M4A  Format = "m4a"
 )
 
 type Progress struct {
@@ -28,10 +33,12 @@ type Progress struct {
 	Speed   string  `json:"speed,omitempty"`
 	ETA     string  `json:"eta,omitempty"`
 	Stage   string  `json:"stage"`
+	File    string  `json:"file,omitempty"`
 }
 
 type Runner struct {
 	Executable string
+	Env        []string
 }
 
 type ExecutionError struct {
@@ -53,27 +60,36 @@ func BuildArgs(rawURL, outputFolder string, format Format) ([]string, error) {
 }
 
 func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist bool) ([]string, error) {
-	if outputFolder == "" || filepath.IsAbs(outputFolder) == false {
+	var err error
+	rawURL, err = urlcheck.Normalize(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if outputFolder == "" || !filepath.IsAbs(outputFolder) {
 		return nil, fmt.Errorf("output folder must be an absolute path")
 	}
 	tempFolder := filepath.Join(outputFolder, ".ytaudio-temp")
-	args := []string{"--newline", "--progress", "--progress-template", "download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta)s", "--progress-delta", "0.5", "--no-overwrites", "--no-keep-video", "--paths", "temp:" + tempFolder, "--js-runtimes", "deno", "--embed-metadata", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
+	args := []string{"--match-filter", "!is_live & !is_upcoming", "--ignore-config", "--no-plugin-dirs", "--no-colors", "--windows-filenames", "--trim-filenames", "180", "--newline", "--progress", "--progress-template", "download:download:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s", "--progress-template", "postprocess:postprocess:%(progress.status)s", "--print", "after_move:filepath:%(filepath)j", "--no-simulate", "--progress-delta", "0.5", "--no-overwrites", "--no-keep-video", "--paths", "temp:" + tempFolder, "--js-runtimes", "deno", "--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg", "--socket-timeout", "30", "--retries", "3", "--sleep-requests", "1", "--sleep-interval", "3", "--max-sleep-interval", "8"}
 	if playlist {
 		args = append(args, "--playlist-end", "100")
 	} else {
 		args = append(args, "--no-playlist")
 	}
+	args = append(args, "-f", "bestaudio/best")
 	switch format {
 	case MP3:
 		args = append(args, "-x", "--audio-format", "mp3", "--audio-quality", "0")
-	case WAV, FLAC:
+	case WAV, FLAC, M4A:
 		args = append(args, "-x", "--audio-format", string(format), "--audio-quality", "0")
+	case OGG:
+		args = append(args, "-x", "--audio-format", "vorbis", "--audio-quality", "0")
 	case MP4:
-		args = append(args, "-f", "bv*+ba/b", "--merge-output-format", "mp4")
+		// Remux the best available audio into MP4 without re-encoding.
+		args = append(args, "--remux-video", "mp4")
 	default:
 		return nil, fmt.Errorf("unsupported format %q", format)
 	}
-	args = append(args, "-o", filepath.Join(outputFolder, "%(title)s [%(id)s].%(ext)s"), "--", rawURL)
+	args = append(args, "-o", filepath.Join(strings.ReplaceAll(outputFolder, "%", "%%"), "%(title)s [%(id)s].%(ext)s"), "--", rawURL)
 	return args, nil
 }
 
@@ -82,6 +98,16 @@ var ansiPattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 func ParseProgress(line string) (Progress, bool) {
 	line = strings.TrimSpace(ansiPattern.ReplaceAllString(line, ""))
+	if strings.HasPrefix(line, "postprocess:") {
+		return Progress{Percent: 100, Stage: "converting"}, true
+	}
+	if strings.HasPrefix(line, "filepath:") {
+		var name string
+		if json.Unmarshal([]byte(strings.TrimPrefix(line, "filepath:")), &name) == nil {
+			return Progress{Percent: 100, Stage: "saved", File: name}, true
+		}
+		return Progress{}, false
+	}
 	matches := progressPattern.FindStringSubmatch(line)
 	if matches == nil {
 		return Progress{}, false
@@ -94,27 +120,58 @@ func ParseProgress(line string) (Progress, bool) {
 	return Progress{Percent: percent, Speed: strings.TrimSpace(matches[2]), ETA: strings.TrimSpace(matches[3]), Stage: "downloading"}, true
 }
 
-func (r Runner) Run(ctx context.Context, args []string, progress func(Progress), output ioWriter) error {
-	cmd := exec.CommandContext(ctx, r.Executable, args...)
-	cmd.Stdout = output
-	stderr, err := cmd.StderrPipe()
+// boundedWriter retains a diagnostic tail without allowing unbounded logs.
+type boundedWriter struct {
+	mu   sync.Mutex
+	data []byte
+}
+
+func (b *boundedWriter) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.data = append(b.data, p...)
+	if len(b.data) > 64*1024 {
+		b.data = append([]byte(nil), b.data[len(b.data)-64*1024:]...)
+	}
+	return len(p), nil
+}
+func (b *boundedWriter) String() string { b.mu.Lock(); defer b.mu.Unlock(); return string(b.data) }
+
+func (r Runner) Run(ctx context.Context, args []string, progress func(Progress), output io.Writer) error {
+	if output == nil {
+		output = io.Discard
+	}
+	cmd := process.Command(ctx, r.Executable, args...)
+	if r.Env != nil {
+		cmd.Env = r.Env
+	}
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	if err := cmd.Start(); err != nil {
+	var log boundedWriter
+	cmd.Stderr = &log
+	cleanup, err := process.Start(cmd)
+	if err != nil {
 		return err
 	}
-	var log bytes.Buffer
-	scannerErr := consumeProgress(io.TeeReader(stderr, &log), progress)
+	defer cleanup()
+	if progress != nil {
+		progress(Progress{Stage: "preparing"})
+	}
+	scannerErr := consumeProgress(io.TeeReader(stdout, output), progress)
+	if scannerErr != nil {
+		_ = cmd.Cancel()
+	}
 	waitErr := cmd.Wait()
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	if scannerErr != nil {
-		return &ExecutionError{Err: scannerErr, Stderr: strings.TrimSpace(log.String())}
+		return &ExecutionError{Err: scannerErr, Stderr: log.String()}
 	}
 	if waitErr != nil {
-		return &ExecutionError{Err: waitErr, Stderr: strings.TrimSpace(log.String())}
+		return &ExecutionError{Err: waitErr, Stderr: log.String()}
 	}
 	return nil
 }
@@ -129,14 +186,20 @@ func consumeProgress(reader io.Reader, progress func(Progress)) error {
 	return scanner.Err()
 }
 
-type ioWriter interface {
-	Write([]byte) (int, error)
-}
-
 func OutputFolder(path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("choose an absolute output folder")
+	}
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("output folder must exist")
 	}
+	f, err := os.CreateTemp(path, ".ytaudio-write-*")
+	if err != nil {
+		return fmt.Errorf("output folder is not writable")
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
 	return nil
 }

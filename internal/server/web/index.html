@@ -2,65 +2,62 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="ytaudio-token" content="{{.Token}}">
-  <title>ytaudio</title>
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ytaudio-token" content="{{.Token}}"><title>ytaudio</title>
+<link rel="icon" type="image/png" href="/static/icon.png">
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <main>
-    <h1>ytaudio</h1>
-    <p class="muted">A private, local YouTube audio downloader.</p>
-    <section class="card" aria-labelledby="update-title">
-      <h2 id="update-title">Application updates</h2>
-      <p id="update-message" role="status" aria-live="polite">Checking for updates...</p>
-      <a id="update-link" hidden target="_blank" rel="noreferrer">View release</a>
-      <button id="update-button" type="button">Check for updates</button>
-    </section>
-    <section class="card" aria-labelledby="setup-title">
-      <h2 id="setup-title">Setup</h2>
-      <p id="setup-message" role="status" aria-live="polite">Checking dependencies...</p>
-      <button id="setup-button" type="button">Set up dependencies</button>
-      <label for="setup-progress">Setup progress</label>
-      <progress id="setup-progress" max="100" value="0"></progress>
-      <p id="setup-details" class="muted small"></p>
-      <p class="muted">Output folder: <code>{{.OutputFolder}}</code></p>
-      <p class="muted">Default format: {{.Format}}</p>
-    </section>
-    <section class="card" aria-labelledby="download-title">
-      <h2 id="download-title">Download audio</h2>
-      <form id="download-form">
-        <label for="url">YouTube URL</label>
-        <input id="url" name="url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
-        <label for="format">Format</label>
-        <select id="format" name="format">
-          <option value="mp3">MP3</option>
-          <option value="wav">WAV (lossless conversion)</option>
-          <option value="flac">FLAC (lossless conversion)</option>
-          <option value="mp4">MP4 video</option>
-        </select>
-        <button type="submit">Download</button>
-      </form>
-      <p class="muted small">YouTube audio is already lossy; converting to lossless would only make files bigger.</p>
-      <p id="download-message" role="status" aria-live="polite"></p>
-      <label for="download-progress">Download progress</label>
-      <progress id="download-progress" max="100" value="0" hidden></progress>
-      <button id="cancel-button" type="button" hidden>Cancel</button>
-    </section>
-    <section class="card" aria-labelledby="diagnostics-title">
-      <h2 id="diagnostics-title">Diagnostics</h2>
-      <pre id="diagnostics" class="diagnostics">Loading...</pre>
-      <button id="refresh-button" type="button">Refresh diagnostics</button>
-      <button id="copy-button" type="button">Copy diagnostics</button>
-    </section>
-    <section class="card" aria-labelledby="history-title">
-      <h2 id="history-title">History</h2>
-      <ul id="history"><li class="muted">No completed downloads.</li></ul>
-    </section>
-    <p class="muted small">This page is served only from your computer.</p>
-  </main>
-  <script src="/static/app.js" defer></script>
-</body>
-</html>
+<div class="app">
+<aside class="sidebar">
+<a class="brand" href="#downloader" aria-label="ytaudio home"><img class="brand-logo" src="/static/icon.png" alt="" width="34" height="34">ytaudio<span class="brand-dot">.</span></a>
+<p class="sidebar-caption">YOUR AUDIO, SIMPLY.</p>
+<nav aria-label="Main navigation">
+<button class="nav-item active" data-page="downloader" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>Downloader</button>
+<button class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>Settings</button>
+<button class="nav-item" data-page="info"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>Info</button>
+</nav>
+<div class="sidebar-bottom"><span class="status-dot"></span>Runs on your computer<p>No accounts. No telemetry.</p></div>
+</aside>
+<div class="workspace">
+<header class="topbar"><span id="page-label">YouTube downloader</span><div class="notifications-wrap">
+<button id="bell" class="icon-button" aria-label="Release notifications" aria-expanded="false" aria-controls="notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span id="notification-count" hidden></span></button>
+<section id="notifications" class="notifications" aria-label="Release notifications" hidden><div class="notification-heading"><strong>Updates</strong><button id="close-notifications" class="text-button" aria-label="Close updates">Close</button></div><div id="notification-list"><p class="muted">Checking releases…</p></div><p class="notification-foot">Updates are always your choice.</p></section>
+</div></header>
+<main>
+<section id="page-downloader" class="page" aria-labelledby="download-heading">
+<div class="page-heading"><p class="eyebrow">FROM VIDEO TO YOUR LIBRARY</p><h1 id="download-heading">YouTube to audio.</h1><p class="lead">Paste a link, choose a format, and save audio to your computer.</p></div>
+<div id="setup-banner" class="notice" hidden><span id="setup-banner-text">Download tools need setup.</span><button class="text-button" data-goto="info">Open Info →</button></div>
+<form id="download-form" class="panel download-panel">
+<label for="url">YouTube link</label><div class="url-field"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><input id="url" name="url" type="url" required autocomplete="off" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="link-help"></div>
+<p id="link-help" class="field-help">Videos and playlists. One download at a time.</p>
+<div class="format-row"><div><label for="format">Audio format</label><select id="format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="mp4">MP4 · audio only</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select></div><p id="format-help" class="format-help"></p></div>
+<div class="destination"><div><span class="small muted">Save to</span><p id="destination">Loading settings…</p></div><button type="button" class="text-button" data-goto="settings">Change</button></div>
+<div class="form-bottom"><span class="quality-note">Always starts with the best available YouTube audio.</span><button id="download-button" class="primary" type="submit">Download audio <span aria-hidden="true">↓</span></button></div>
+<p id="download-message" class="feedback" role="status" aria-live="polite"></p>
+</form>
+<div class="queue-heading"><h2>Downloads <span id="queue-count" class="count">0</span></h2><button id="open-folder" class="text-button">Open folder ↗</button></div>
+<div id="jobs" aria-label="Current session downloads"><div class="empty-state"><span class="empty-icon" aria-hidden="true">♫</span><p>Your next listen starts here.</p><span class="small muted">Downloads will appear here while this app is open.</span></div></div>
+<p class="footer-note">Only download content you have permission to save.</p>
+</section>
+<section id="page-settings" class="page" aria-labelledby="settings-heading" hidden>
+<div class="page-heading"><p class="eyebrow">A LITTLE MORE PERSONAL</p><h1 id="settings-heading">Your preferences.</h1><p class="lead">Set it once. Get on with listening.</p></div>
+<form id="settings-form" class="panel settings-panel">
+<label for="output-folder">Download folder</label><div class="input-with-button"><input id="output-folder" name="output_folder" required spellcheck="false"><button id="choose-folder" type="button" class="secondary">Choose…</button></div><p class="field-help">Choose an existing folder where you can save files.</p>
+<label for="default-format">Default format</label><select id="default-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="mp4">MP4 · audio only</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
+<details><summary>Connection &amp; queue</summary><label for="proxy">Proxy URL <span class="muted">(optional)</span></label><input id="proxy" name="proxy" type="password" autocomplete="off" placeholder="http://127.0.0.1:8080"><p class="field-help">Used for downloads, tool setup, and release checks. Leave blank for your normal connection.</p><label for="daily-cap">Download jobs per session</label><input id="daily-cap" name="daily_cap" type="number" min="1" max="10000" required><p class="field-help">A playlist is one job, capped at 100 videos.</p></details>
+<div class="form-bottom"><p id="settings-message" class="feedback" role="status" aria-live="polite"></p><button id="save-settings" class="primary" type="submit">Save preferences</button></div>
+</form></section>
+<section id="page-info" class="page" aria-labelledby="info-heading" hidden>
+<div class="page-heading"><p class="eyebrow">EVERYTHING UNDER THE HOOD</p><h1 id="info-heading">Here to help.</h1><p class="lead">Keep things running. Share details when they don’t.</p></div>
+<div class="panel info-panel"><div class="section-title"><h2 class="app-title"><img class="app-logo" src="/static/icon.png" alt="" width="40" height="40">ytaudio <span id="app-version" class="version"></span></h2><button id="check-app-update" class="secondary">Check for updates</button></div><p id="app-update-message" role="status" class="muted">Checking releases…</p><button id="latest-release" class="text-button" hidden>View latest release ↗</button><p class="small muted">New versions appear in the bell menu. You decide when to install them.</p></div>
+<div class="panel info-panel"><div class="section-title"><h2>Download tools</h2><span id="tools-badge" class="badge">Checking</span></div><p class="muted">Tools download automatically on first launch, directly from their providers, and are verified before use. yt-dlp gets the audio, FFmpeg converts it, and Deno handles YouTube’s player.</p><ul id="dependencies" class="dependency-list"></ul><p id="setup-message" role="status" aria-live="polite"></p><progress id="setup-progress" max="100" hidden></progress><div class="button-row"><button id="setup-button" class="primary">Set up / repair</button><button id="update-tools" class="secondary">Update yt-dlp</button></div></div>
+<div class="panel info-panel"><div class="section-title"><h2>Troubleshooting</h2><button id="copy-diagnostics" class="secondary">Copy diagnostics</button></div><p class="muted">Something not working? Copy these details and send them to the person who shared the app.</p><p id="copy-message" role="status" class="feedback"></p><details><summary>Technical details</summary><pre id="diagnostics">Loading…</pre></details></div>
+<p class="footer-note">No account, analytics, or hosted download service. Downloads use your own connection.</p>
+</section>
+</main>
+</div></div>
+<dialog id="playlist-dialog"><h2>Download this playlist?</h2><p>Up to 100 videos will be processed, one at a time. You can cancel at any point.</p><div class="button-row"><button id="playlist-no" class="secondary">Go back</button><button id="playlist-yes" class="primary">Download playlist</button></div></dialog>
+<script src="/static/app.js" defer></script>
+</body></html>
 {{end}}

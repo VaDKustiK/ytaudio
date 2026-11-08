@@ -27,13 +27,14 @@ type Queue struct {
 	day      string
 	count    int
 	wake     chan struct{}
+	done     chan struct{}
 }
 
 func New(dailyCap int) *Queue {
 	if dailyCap < 1 {
 		dailyCap = 30
 	}
-	q := &Queue{dailyCap: dailyCap, day: time.Now().Format("2006-01-02"), wake: make(chan struct{}, 1)}
+	q := &Queue{dailyCap: dailyCap, day: time.Now().Format("2006-01-02"), wake: make(chan struct{}, 1), done: make(chan struct{})}
 	go q.worker()
 	return q
 }
@@ -45,7 +46,11 @@ func (q *Queue) Submit(id string, task Task) (*Job, error) {
 		return nil, fmt.Errorf("queue is closed")
 	}
 	q.resetDayLocked()
-	if q.count+len(q.pending) >= q.dailyCap {
+	reserved := q.count + len(q.pending)
+	if q.working {
+		reserved++
+	}
+	if reserved >= q.dailyCap {
 		return nil, fmt.Errorf("daily download limit reached")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,6 +62,11 @@ func (q *Queue) Submit(id string, task Task) (*Job, error) {
 
 func (q *Queue) Close() {
 	q.mu.Lock()
+	if q.closed {
+		q.mu.Unlock()
+		<-q.done
+		return
+	}
 	q.closed = true
 	for _, job := range q.pending {
 		job.Cancel()
@@ -69,9 +79,11 @@ func (q *Queue) Close() {
 	q.pending = nil
 	q.mu.Unlock()
 	q.signal()
+	<-q.done
 }
 
 func (q *Queue) worker() {
+	defer close(q.done)
 	for {
 		q.mu.Lock()
 		if q.closed && len(q.pending) == 0 && !q.working {
@@ -89,11 +101,19 @@ func (q *Queue) worker() {
 		q.current = job
 		q.mu.Unlock()
 
-		err := job.Task(job.ctx)
+		var err error
+		if job.ctx.Err() != nil {
+			err = job.ctx.Err()
+		} else {
+			err = job.Task(job.ctx)
+		}
+		job.Cancel()
 		q.mu.Lock()
 		q.working = false
 		q.current = nil
-		q.count++
+		if err == nil {
+			q.count++
+		}
 		job.Done <- err
 		close(job.Done)
 		q.mu.Unlock()
@@ -114,3 +134,5 @@ func (q *Queue) resetDayLocked() {
 		q.day, q.count = today, 0
 	}
 }
+
+func (q *Queue) SetLimit(limit int) { q.mu.Lock(); defer q.mu.Unlock(); q.dailyCap = limit }

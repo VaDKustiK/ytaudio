@@ -23,6 +23,7 @@ import (
 var version = "dev"
 
 func main() {
+	noBrowser := flag.Bool("no-browser", false, "serve the local UI without opening a browser")
 	versionFlag := flag.Bool("version", false, "print the application version")
 	flag.Parse()
 	if *versionFlag {
@@ -44,10 +45,13 @@ func main() {
 	appURL := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	srv := server.New(cfg, appURL, version)
 	defer srv.Close()
+	srv.SetDesktopActions(nil, revealFolder, openBrowser)
 	httpServer := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second}
 
 	log.Printf("ytaudio %s listening at %s", version, appURL)
-	openBrowser(appURL)
+	if !*noBrowser {
+		openBrowser(appURL)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -59,6 +63,7 @@ func main() {
 	}()
 
 	<-ctx.Done()
+	srv.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
