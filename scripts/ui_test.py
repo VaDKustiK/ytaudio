@@ -57,9 +57,35 @@ def test(binary, screenshots):
                     route.fulfill(status=204)
                 page.route("**/api/jobs/*",cancel)
                 page.route("**/api/open-release",lambda r:r.fulfill(status=204))
+                page.context.grant_permissions(["clipboard-read", "clipboard-write"], origin=url)
                 page.goto(url)
                 expect(page.locator("#download-button")).to_be_enabled()
                 expect(page.locator("#notification-count")).to_have_text("1")
+                assert page.locator(".topbar, #page-label, .brand-dot, .sidebar-caption, .url-field svg").count()==0
+                assert page.evaluate("getComputedStyle(document.documentElement).colorScheme")=="dark"
+                background=page.evaluate("getComputedStyle(document.documentElement).backgroundColor")
+                page.emulate_media(color_scheme="dark")
+                assert page.evaluate("getComputedStyle(document.documentElement).backgroundColor")==background
+                page.emulate_media(color_scheme="light")
+                removed=["Videos and playlists. One download at a time.","Always starts with the best available YouTube audio.","Only download content you have permission to save.","FROM VIDEO TO YOUR LIBRARY","Paste a link, choose a format, and save audio to your computer.","YouTube to audio.","YOUR AUDIO, SIMPLY.","A LITTLE MORE PERSONAL","Set it once. Get on with listening.","EVERYTHING UNDER THE HOOD","Keep things running. Share details when they don’t.","No account, analytics, or hosted download service. Downloads use your own connection."]
+                for text in removed:assert text not in page.locator("body").text_content(),text
+                page.evaluate("navigator.clipboard.writeText('  https://youtu.be/pasted-link  ')")
+                page.locator("#paste-url").click()
+                expect(page.locator("#url")).to_have_value("https://youtu.be/pasted-link")
+                assert not submissions,"Paste must not start a download"
+                page.evaluate("navigator.clipboard.writeText('')")
+                page.locator("#paste-url").click()
+                expect(page.locator("#download-message")).to_have_text("Clipboard is empty.")
+                expect(page.locator("#url")).to_have_value("https://youtu.be/pasted-link")
+                page.evaluate("() => {window.savedReadText=navigator.clipboard.readText; navigator.clipboard.readText=async()=>{throw new DOMException('Denied','NotAllowedError')};}")
+                page.locator("#paste-url").click()
+                expect(page.locator("#download-message")).to_contain_text("using your keyboard")
+                expect(page.locator("#paste-url")).to_be_enabled()
+                page.evaluate("window.runtime={ClipboardGetText:async()=> 'https://youtu.be/native-link'}")
+                page.locator("#paste-url").click()
+                expect(page.locator("#url")).to_have_value("https://youtu.be/native-link")
+                expect(page.locator("#download-message")).to_be_empty()
+                page.evaluate("delete window.runtime;navigator.clipboard.readText=window.savedReadText;delete window.savedReadText")
                 page.locator("#bell").click();expect(page.locator("#notifications")).to_be_visible()
                 expect(page.locator(".notification-item strong")).to_contain_text("<img")
                 assert page.locator("#notifications img").count()==0
@@ -69,6 +95,7 @@ def test(binary, screenshots):
                     page.select_option("#format",format);assert page.locator("#format-help").inner_text()
                 page.locator('[data-page="settings"]').click()
                 expect(page.locator("#page-settings")).to_be_visible()
+                expect(page.locator("#settings-heading")).to_have_text("Settings")
                 page.select_option("#default-format","flac");page.locator("#save-settings").click()
                 expect(page.locator("#settings-message")).to_have_text("Preferences saved.")
                 assert json.loads((directory / "config.json").read_text())["format"]=="flac"
@@ -86,16 +113,26 @@ def test(binary, screenshots):
                 expect(page.locator(".job-title")).to_have_text("Music <script>.flac")
                 assert page.locator("#jobs script").count()==0
                 screenshots.mkdir(parents=True,exist_ok=True)
-                page.screenshot(path=str(screenshots / "downloader-light.png"),full_page=True)
+                page.screenshot(path=str(screenshots / "downloader-dark-on-light-system.png"),full_page=True)
                 page.emulate_media(color_scheme="dark");page.screenshot(path=str(screenshots / "downloader-dark.png"),full_page=True)
+                page.locator('[data-page="settings"]').click()
+                page.screenshot(path=str(screenshots / "settings-dark.png"),full_page=True)
                 page.locator('[data-page="info"]').click();expect(page.locator("#app-version")).to_have_text("v0.1.0")
+                expect(page.locator("#info-heading")).to_have_text("Info")
                 page.screenshot(path=str(screenshots / "info-dark.png"),full_page=True)
                 page.set_viewport_size({"width":390,"height":844});page.locator('[data-page="downloader"]').click()
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
                 page.screenshot(path=str(screenshots / "mobile-dark.png"),full_page=True)
+                for width in (390,640,760,1100):
+                    page.set_viewport_size({"width":width,"height":800})
+                    for section in ("settings","info","downloader"):
+                        page.locator(f'[data-page="{section}"]').click()
+                        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),(width,section)
+                        bell=page.locator("#bell").bounding_box()
+                        assert bell["x"]>=0 and bell["x"]+bell["width"]<=width
                 assert not errors,errors
                 browser.close()
-                print("PASS: navigation, saved settings, formats, progress, cancel/dismiss, playlists, release bell, safe text, responsive layouts; no JavaScript errors")
+                print("PASS: navigation, saved settings, formats, progress, cancel/dismiss, playlists, release bell, safe text, dark mode, clipboard success/empty/denied/native bridge, responsive layouts; no JavaScript errors")
         finally:
             process.terminate()
             try:process.wait(timeout=10)

@@ -26,13 +26,30 @@ function showPage(page) {
     button.classList.toggle("active", active);
     if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
   });
-  $("#page-label").textContent = {downloader: "YouTube downloader", settings: "Preferences", info: "About & troubleshooting"}[page];
 }
 document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.page)));
 document.querySelectorAll("[data-goto]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.goto)));
 $(".brand").addEventListener("click", event => { event.preventDefault(); showPage("downloader"); });
 function formatHelp() { $("#format-help").textContent = descriptions[$("#format").value]; }
 $("#format").addEventListener("change", formatHelp);
+$("#paste-url").addEventListener("click", async () => {
+  const button = $("#paste-url"), field = $("#url");
+  button.disabled = true;
+  try {
+    const text = window.runtime?.ClipboardGetText
+      ? await window.runtime.ClipboardGetText()
+      : await navigator.clipboard.readText();
+    if (!text.trim()) { feedback("#download-message", "Clipboard is empty.", true); return; }
+    field.value = text.trim();
+    field.dispatchEvent(new Event("input", {bubbles: true}));
+    feedback("#download-message", "");
+  } catch {
+    feedback("#download-message", "Clipboard access is unavailable. Paste into the link field using your keyboard.", true);
+  } finally {
+    button.disabled = false;
+    field.focus();
+  }
+});
 function applySettings(data) {
   settings = data;
   $("#output-folder").value = data.output_folder;
@@ -198,7 +215,7 @@ $("#copy-diagnostics").addEventListener("click", async () => {
     const text = $("#diagnostics").textContent;
     if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
     else { const field = document.createElement("textarea"); field.value = text; field.className = "clipboard-helper"; document.body.append(field); field.select(); const copied = document.execCommand("copy"); field.remove(); if (!copied) throw new Error(); }
-    feedback("#copy-message", "Copied. You can paste these details into a message.");
+    feedback("#copy-message", "Copied");
   } catch { feedback("#copy-message", "Clipboard unavailable. Open Technical details and copy the text.", true); }
 });
 async function init() {

@@ -36,12 +36,13 @@ func main() {
 	var appContext atomic.Value
 	defer app.Close()
 	if err := wails.Run(&options.App{
-		Title:     "ytaudio",
-		Linux:     &linux.Options{Icon: packaging.Icon, ProgramName: "ytaudio", WebviewGpuPolicy: linux.WebviewGpuPolicyNever},
-		Width:     1100,
-		Height:    800,
-		MinWidth:  640,
-		MinHeight: 600,
+		Title:            "ytaudio",
+		BackgroundColour: &options.RGBA{R: 18, G: 22, B: 30, A: 255},
+		Linux:            &linux.Options{Icon: packaging.Icon, ProgramName: "ytaudio", WebviewGpuPolicy: linux.WebviewGpuPolicyNever},
+		Width:            1100,
+		Height:           800,
+		MinWidth:         640,
+		MinHeight:        600,
 		OnStartup: func(ctx context.Context) {
 			appContext.Store(ctx)
 			app.SetDesktopActions(func() (string, error) {

@@ -40,6 +40,14 @@ func main() {
 			wruntime.WindowExecJS(ctx, `(async()=>{try{
  await new Promise(r=>setTimeout(r,1500));
  const logo=document.querySelector('.brand-logo');await logo.decode();if(!logo.naturalWidth)throw Error('application artwork');
+ if(getComputedStyle(document.documentElement).colorScheme!=='dark')throw Error('dark mode');
+ const previous=await window.runtime.ClipboardGetText();
+ try {
+ await window.runtime.ClipboardSetText('https://youtu.be/native-paste');
+ document.querySelector('#paste-url').click();
+ for(let i=0;i<30&&document.querySelector('#url').value!=='https://youtu.be/native-paste';i++)await new Promise(r=>setTimeout(r,50));
+ if(document.querySelector('#url').value!=='https://youtu.be/native-paste')throw Error('native clipboard paste');
+ }finally{await window.runtime.ClipboardSetText(previous);}
  const token=document.querySelector('meta[name="ytaudio-token"]').content;
  const health=await(await fetch('/api/health')).json();if(health.status!=='ok')throw Error('health');
  const settings=await(await fetch('/api/settings')).json();if(!settings.output_folder)throw Error('settings');
