@@ -108,7 +108,7 @@ FFmpeg is a separate process, not linked into the app. Do not add cached tools
 to release archives: redistributing them requires meeting their own licenses,
 including corresponding-source obligations for the exact FFmpeg builds.
 
-The `Release` workflow builds all six targets after validation. A push to the
+The `Release` workflow builds all five targets after validation. A push to the
 production `main` branch publishes `v0.2.<workflow run number>` only after all
 builds succeed. A `vX.Y.Z` tag or manual workflow can select a version instead.
 Use monotonically increasing versions for update notifications. Feature work
