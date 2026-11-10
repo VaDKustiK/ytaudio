@@ -44,6 +44,10 @@ type release struct {
 func Check(ctx context.Context, current string) Info { return CheckWithProxy(ctx, current, "") }
 func CheckWithProxy(ctx context.Context, current, proxy string) Info {
 	result := Info{Current: current, Notifications: []Notification{}}
+	// Unversioned local builds cannot be compared with published releases.
+	if current == "dev" {
+		return result
+	}
 	client, err := deps.HTTPClient(proxy)
 	if err != nil {
 		result.Error = "Check your proxy settings."
@@ -65,6 +69,14 @@ func checkWithClient(ctx context.Context, current string, client *http.Client) I
 	defer response.Body.Close()
 	if response.StatusCode == 404 {
 		result.Error = "No published releases yet."
+		return result
+	}
+	if response.StatusCode == http.StatusTooManyRequests || (response.StatusCode == http.StatusForbidden && response.Header.Get("X-RateLimit-Remaining") == "0") {
+		result.Error = "GitHub’s update-check limit was reached. Try again later; downloads still work."
+		return result
+	}
+	if response.StatusCode == http.StatusForbidden {
+		result.Error = "GitHub blocked the update check. Try again later; downloads still work."
 		return result
 	}
 	if response.StatusCode != 200 {

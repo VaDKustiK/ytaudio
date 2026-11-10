@@ -58,3 +58,32 @@ func TestReleaseFailuresAreFriendly(t *testing.T) {
 		}
 	}
 }
+
+func TestDevelopmentBuildSkipsReleaseCheck(t *testing.T) {
+	// This proxy would fail validation if a network client were created.
+	info := CheckWithProxy(context.Background(), "dev", "invalid-proxy")
+	if info.Current != "dev" || info.Checking || info.Ready || info.Error != "" || info.Latest != "" || len(info.Notifications) != 0 {
+		t.Fatalf("development builds must not check releases: %+v", info)
+	}
+}
+
+func TestReleaseCheckDistinguishesRateLimitsFromOtherDenials(t *testing.T) {
+	for _, tc := range []struct {
+		status          int
+		remaining, want string
+	}{
+		{403, "0", "update-check limit"},
+		{429, "", "update-check limit"},
+		{403, "15", "blocked the update check"},
+	} {
+		client := &http.Client{Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+			headers := make(http.Header)
+			headers.Set("X-RateLimit-Remaining", tc.remaining)
+			return &http.Response{StatusCode: tc.status, Header: headers, Body: io.NopCloser(strings.NewReader("no"))}, nil
+		})}
+		info := checkWithClient(context.Background(), "v1.0.0", client)
+		if !strings.Contains(info.Error, tc.want) || info.Ready {
+			t.Fatalf("%d: %+v", tc.status, info)
+		}
+	}
+}

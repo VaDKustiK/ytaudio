@@ -71,6 +71,17 @@ also need a C compiler, `pkg-config`, GTK 3, and WebKitGTK 4.1 development files
 go run -tags 'desktop production webkit2_41' ./cmd/ytaudio
 ```
 
+To rebuild the local Linux executable without assigning a release version:
+
+```sh
+go build -tags 'desktop production webkit2_41' -o ytaudio ./cmd/ytaudio
+./ytaudio
+```
+
+Local builds show **Development build** and skip app-release checks. Packaged
+releases receive their version from the release workflow or the explicit
+`--version` packaging argument; there is no fixed release version in the app.
+
 On Windows/macOS, omit `webkit2_41`. Windows builds do not require CGO;
 macOS/Linux use native libraries and CGO. The default browser mode is available
 for development: `go run ./cmd/ytaudio --no-browser`. It binds only to 127.0.0.1.

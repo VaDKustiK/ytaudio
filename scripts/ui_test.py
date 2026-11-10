@@ -130,6 +130,17 @@ def test(binary, screenshots):
                         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),(width,section)
                         bell=page.locator("#bell").bounding_box()
                         assert bell["x"]>=0 and bell["x"]+bell["width"]<=width
+                # Unversioned local builds must not appear to be published releases.
+                page.route("**/api/diagnostics",lambda r:fulfill(r,{"version":"dev","os":"linux","arch":"amd64","ready":True,"setup":{"running":False,"message":"Download tools are ready","percent":100},"dependencies":[],"last_log":""}))
+                page.route("**/api/app-update",lambda r:fulfill(r,{"current":"dev","ready":False,"checking":False,"notifications":[]}))
+                page.reload()
+                page.locator('[data-page="info"]').click()
+                expect(page.locator("#app-version")).to_have_text("Development build")
+                expect(page.locator("#app-update-message")).to_have_text("Development build. App update checks are available in release builds.")
+                expect(page.locator("#check-app-update")).to_be_hidden()
+                expect(page.locator("#notification-count")).to_be_hidden()
+                page.locator("#bell").click()
+                expect(page.locator("#notification-list")).to_contain_text("Development build")
                 assert not errors,errors
                 browser.close()
                 print("PASS: navigation, saved settings, formats, progress, cancel/dismiss, playlists, release bell, safe text, dark mode, clipboard success/empty/denied/native bridge, responsive layouts; no JavaScript errors")

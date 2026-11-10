@@ -22,7 +22,7 @@ import (
 
 func main() {
 	cfg := config.Defaults()
-	app := server.New(cfg, "http://wails.localhost/", "v0.1.0")
+	app := server.New(cfg, "http://wails.localhost/", "dev")
 	defer app.Close()
 	var passed atomic.Bool
 	err := wails.Run(&options.App{Title: "ytaudio · native smoke test", Width: 1100, Height: 800, AssetServer: &assetserver.Options{Handler: app.DesktopHandler()},

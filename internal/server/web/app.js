@@ -79,7 +79,7 @@ $("#open-folder").addEventListener("click", async () => {
 });
 function renderDiagnostics(data) {
   diagnostics = data;
-  $("#app-version").textContent = data.version;
+  $("#app-version").textContent = data.version === "dev" ? "Development build" : data.version;
   $("#diagnostics").textContent = JSON.stringify(data, null, 2);
   $("#setup-message").textContent = data.setup.error || data.setup.message;
   $("#setup-message").classList.toggle("error", Boolean(data.setup.error));
@@ -187,7 +187,8 @@ async function openRelease(url) {
 }
 function renderReleases(data) {
   releases = data;
-  const message = data.checking ? "Checking releases…" : data.error || (data.ready ? `Version ${data.latest} is available.` : data.current === "dev" ? "Development build. Published releases will be shown in packaged versions." : data.latest ? "You’re up to date." : "No published releases yet.");
+  $("#check-app-update").hidden = data.current === "dev";
+  const message = data.checking ? "Checking releases…" : data.error || (data.ready ? `Version ${data.latest} is available.` : data.current === "dev" ? "Development build. App update checks are available in release builds." : data.latest ? "You’re up to date." : "No published releases yet.");
   $("#app-update-message").textContent = message;
   $("#latest-release").hidden = !data.url;
   $("#latest-release").onclick = () => openRelease(data.url);
