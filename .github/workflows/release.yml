@@ -43,8 +43,7 @@ jobs:
         include:
           - {goos: windows, goarch: amd64, runner: windows-2022}
           - {goos: windows, goarch: arm64, runner: windows-2022}
-          - {goos: darwin, goarch: amd64, runner: macos-14}
-          - {goos: darwin, goarch: arm64, runner: macos-14}
+          - {goos: darwin, goarch: arm64, runner: macos-15}
           - {goos: linux, goarch: amd64, runner: ubuntu-22.04}
           - {goos: linux, goarch: arm64, runner: ubuntu-24.04-arm}
     steps:

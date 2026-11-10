@@ -57,6 +57,8 @@ def asset(info, name):
 
 
 def prepare(goos, arch, output):
+    if goos == "darwin" and arch != "arm64":
+        raise ValueError("macOS tools support Apple Silicon (arm64) only")
     output = pathlib.Path(output)
     output.mkdir(parents=True, exist_ok=True)
     ext = ".exe" if goos == "windows" else ""
@@ -69,7 +71,7 @@ def prepare(goos, arch, output):
         path.chmod(0o755)
         path.replace(target)
         manifest.append({"installed": name, **record})
-    yt_names = {("windows", "amd64"): "yt-dlp.exe", ("windows", "arm64"): "yt-dlp_arm64.exe", ("linux", "amd64"): "yt-dlp_linux", ("linux", "arm64"): "yt-dlp_linux_aarch64", ("darwin", "amd64"): "yt-dlp_macos", ("darwin", "arm64"): "yt-dlp_macos"}
+    yt_names = {("windows", "amd64"): "yt-dlp.exe", ("windows", "arm64"): "yt-dlp_arm64.exe", ("linux", "amd64"): "yt-dlp_linux", ("linux", "arm64"): "yt-dlp_linux_aarch64", ("darwin", "arm64"): "yt-dlp_macos"}
     data, record = asset(release("yt-dlp/yt-dlp"), yt_names[(goos, arch)])
     save("yt-dlp" + ext, data, record)
     target_arch = "x86_64" if arch == "amd64" else "aarch64"

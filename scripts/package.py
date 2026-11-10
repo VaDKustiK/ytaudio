@@ -12,6 +12,8 @@ def run(args, **kwargs):
 
 
 def package(goos, arch, version):
+    if goos == "darwin" and arch != "arm64":
+        raise ValueError("macOS packages support Apple Silicon (arm64) only")
     version = version.removeprefix("v")
     if not version or any(c not in "0123456789.-abcdefghijklmnopqrstuvwxyz" for c in version):
         raise ValueError("Invalid version")

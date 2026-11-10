@@ -45,8 +45,8 @@ Build outputs are placed in `dist/`:
   The app uses Microsoft WebView2. Windows 11 normally includes it; on older
   Windows installations, follow Wails' missing-runtime prompt if it appears.
   Unsigned builds can trigger SmartScreen. Prefer signed releases for friends.
-- **macOS:** `.app` inside a DMG, plus ZIP; separate Intel and Apple Silicon
-  builds. Drag the app into Applications. Local/CI builds are ad-hoc signed
+- **macOS (Apple Silicon):** `.app` inside a DMG, plus ZIP. Drag the app into
+  Applications. Local/CI builds are ad-hoc signed
   unless a signing identity is provided. Developer ID signing and notarization
   need the maintainer's Apple credentials before frictionless distribution.
 - **Ubuntu, Debian, Mint:** install the DEB, for example

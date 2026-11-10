@@ -82,15 +82,13 @@ func TestDownloadVerifiedUsesChecksumAndAtomicReplace(t *testing.T) {
 	}
 }
 
-func TestYTDLPFilenameUsesUniversalMacOSAsset(t *testing.T) {
-	for _, arch := range []string{"amd64", "arm64"} {
-		got, err := ytDLPFilename("darwin", arch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != "yt-dlp_macos" {
-			t.Fatalf("darwin/%s filename = %q", arch, got)
-		}
+func TestYTDLPFilenameSupportsAppleSiliconOnly(t *testing.T) {
+	got, err := ytDLPFilename("darwin", "arm64")
+	if err != nil || got != "yt-dlp_macos" {
+		t.Fatalf("darwin/arm64 filename = %q, err = %v", got, err)
+	}
+	if _, err := ytDLPFilename("darwin", "amd64"); err == nil {
+		t.Fatal("darwin/amd64 should be unsupported")
 	}
 }
 

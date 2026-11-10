@@ -45,7 +45,7 @@ func ytDLPFilename(goos, goarch string) (string, error) {
 		return "yt-dlp_linux", nil
 	case "linux/arm64":
 		return "yt-dlp_linux_aarch64", nil
-	case "darwin/amd64", "darwin/arm64":
+	case "darwin/arm64":
 		// yt-dlp publishes one universal macOS executable.
 		return "yt-dlp_macos", nil
 	default:
