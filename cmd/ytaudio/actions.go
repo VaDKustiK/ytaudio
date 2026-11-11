@@ -1,21 +1,22 @@
 package main
 
 import (
-	"context"
-	"github.com/VaDKustiK/ytaudio/internal/process"
-	"runtime"
-	"time"
+	"fmt"
+	"os"
+	"path/filepath"
 )
 
 func revealFolder(folder string) error {
-	name := "xdg-open"
-	if runtime.GOOS == "windows" {
-		return startProcess("explorer.exe", []string{folder})
+	if !filepath.IsAbs(folder) {
+		return fmt.Errorf("output folder must be an absolute path")
 	}
-	if runtime.GOOS == "darwin" {
-		name = "open"
+	folder = filepath.Clean(folder)
+	info, err := os.Stat(folder)
+	if err != nil {
+		return fmt.Errorf("open output folder: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return process.Command(ctx, name, folder).Run()
+	if !info.IsDir() {
+		return fmt.Errorf("output path is not a folder")
+	}
+	return openFolder(folder)
 }
