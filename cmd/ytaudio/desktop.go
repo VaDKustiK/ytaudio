@@ -37,6 +37,7 @@ func main() {
 	defer app.Close()
 	if err := wails.Run(&options.App{
 		Title:            "ytaudio",
+		DragAndDrop:      &options.DragAndDrop{EnableFileDrop: true},
 		BackgroundColour: &options.RGBA{R: 18, G: 22, B: 30, A: 255},
 		Linux:            &linux.Options{Icon: packaging.Icon, ProgramName: "ytaudio", WebviewGpuPolicy: linux.WebviewGpuPolicyNever},
 		Width:            1100,
@@ -45,6 +46,9 @@ func main() {
 		MinHeight:        600,
 		OnStartup: func(ctx context.Context) {
 			appContext.Store(ctx)
+			app.SetAudioPicker(func() (string, error) {
+				return wailsruntime.OpenFileDialog(ctx, wailsruntime.OpenDialogOptions{Title: "Choose audio", Filters: []wailsruntime.FileFilter{{DisplayName: "Audio", Pattern: "*.wav;*.mp3;*.flac;*.m4a;*.ogg;*.opus;*.aac;*.aiff;*.aif;*.wma;*.webm;*.mp4"}}})
+			})
 			app.SetDesktopActions(func() (string, error) {
 				return wailsruntime.OpenDirectoryDialog(ctx, wailsruntime.OpenDialogOptions{Title: "Choose your download folder", CanCreateDirectories: true})
 			}, revealFolder, func(url string) { wailsruntime.BrowserOpenURL(ctx, url) })

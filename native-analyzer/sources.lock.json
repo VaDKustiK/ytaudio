@@ -1,0 +1,72 @@
+{
+  "beat-source.tar.gz": {
+    "url": "https://codeload.github.com/mosynthkey/beat_this_cpp/tar.gz/07ab790a9ec2eda8093d52d249e3ec4f0510ee72",
+    "sha256": "cacd0169e1898d9e83b4c365a1eea7d35eb07a262065ee61f3d596ff16350b1d",
+    "size": 75288190
+  },
+  "key-source.tar.gz": {
+    "url": "https://codeload.github.com/a1ex90/MusicalKeyCNN/tar.gz/61d8fc170f262410f66a12057adffc5aceea0b2c",
+    "sha256": "5f1d8cc6fd0fc09afc0e44ff6484177c838d86e7cbe9c2dd3b8af4737013718b",
+    "size": 1750845
+  },
+  "pocketfft.tar.gz": {
+    "url": "https://codeload.github.com/mreineck/pocketfft/tar.gz/0fa0ef591e38c2758e3184c6c23e497b9f732ffa",
+    "sha256": "1cfd0494ac6fe88e034579cb655b0ef9731b39a0432558e50fe41c4abd6d8684",
+    "size": 27775
+  },
+  "r8brain.tar.gz": {
+    "url": "https://codeload.github.com/avaneev/r8brain-free-src/tar.gz/e71c31bf320f84210bb4bdcb57e296c39ce940f9",
+    "sha256": "d4bac010ee800cb49913ca61fed8a192ca5707d0e1e1760eac0b3f122ed3db86",
+    "size": 13528070
+  },
+  "json.hpp": {
+    "url": "https://github.com/nlohmann/json/releases/download/v3.12.0/json.hpp",
+    "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63",
+    "size": 953436
+  },
+  "beat_this.onnx": {
+    "url": "https://raw.githubusercontent.com/mosynthkey/beat_this_cpp/07ab790a9ec2eda8093d52d249e3ec4f0510ee72/onnx/beat_this.onnx",
+    "sha256": "c5c1466e08abdb03fdeb50668a06f244b787d564c212490482231a9cfbe9ccbd",
+    "size": 83077778
+  },
+  "keynet.pt": {
+    "url": "https://raw.githubusercontent.com/a1ex90/MusicalKeyCNN/61d8fc170f262410f66a12057adffc5aceea0b2c/checkpoints/keynet.pt",
+    "sha256": "fc92072f1b9b19552ce3b74a9c8ce0cecb97633a12ae524ac0d93c05800e354e",
+    "size": 1874533
+  },
+  "final0.ckpt": {
+    "url": "https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt",
+    "sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331",
+    "size": 81058141
+  },
+  "onnxruntime-linux-x64-1.23.2.tgz": {
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz",
+    "sha256": "1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b",
+    "size": 8309231
+  },
+  "onnxruntime-linux-aarch64-1.23.2.tgz": {
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-aarch64-1.23.2.tgz",
+    "sha256": "7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c",
+    "size": 7254068
+  },
+  "onnxruntime-win-x64-1.23.2.zip": {
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-x64-1.23.2.zip",
+    "sha256": "0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd",
+    "size": 78127794
+  },
+  "onnxruntime-win-arm64-1.23.2.zip": {
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-arm64-1.23.2.zip",
+    "sha256": "1cfe88b6435df3b5fb0e9f6bd7d6f5df1e887b6174de7f6e2a47bab956f3f168",
+    "size": 78932411
+  },
+  "onnxruntime-osx-arm64-1.23.2.tgz": {
+    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-osx-arm64-1.23.2.tgz",
+    "sha256": "b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856",
+    "size": 9999931
+  },
+  "beat-reference.tar.gz": {
+    "url": "https://codeload.github.com/CPJKU/beat_this/tar.gz/b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c",
+    "sha256": "6c40ca7149ccfe5afba1e650eabb7c73fca5b5ac1e40b9ca60bf259d7c2048b8",
+    "size": 4938005
+  }
+}

@@ -100,8 +100,8 @@ Make sure Go's bin directory is on PATH. Packaging Linux also needs `tar` and
 macOS packaging uses `codesign`, `ditto`, and `hdiutil`. All package icons are
 generated from `packaging/ytaudiologo.png`; no extra icon source files are needed.
 
-Releases contain the application and its Go dependency license notices, **no
-companion executables**. Missing tools download directly from their providers
+Main application packages contain the app and its Go dependency license notices,
+**no companion executables**. The optional analyzer has separate release assets. Missing tools download directly from their providers
 into the user's private cache on first launch. Downloads are SHA-256 verified
 before activation; existing working tools remain available after failed updates.
 FFmpeg is a separate process, not linked into the app. Do not add cached tools
@@ -176,3 +176,43 @@ or personal download logs in public issues.
 
 Use only where you have the necessary permission and respect copyright and
 YouTube's terms. Desktop distribution does not itself grant downloading rights.
+
+## BPM, key and tuning (development)
+
+The **BPM and key detector** accepts local audio through Choose audio or drag
+and drop. A completed download's **BPM and key detection** button opens it and starts analysis
+on the actual saved file. Analysis never edits the source audio.
+
+The optional native component downloads separately; the main app installer stays
+small. Once the analyzer and FFmpeg are installed, local-file analysis works
+completely offline. Tempo/key/tuning are estimates: half/double-time, relative
+major/minor, mixed tuning, and uncertain results can be musically ambiguous.
+The displayed and copied BPM prefer the faster of the two tempo interpretations,
+rounded to a whole number. The slower alternative is hidden.
+The detector supports the existing five CPU/OS targets. The analyzer's macOS
+package targets macOS 13.4+, and native Windows/macOS/ARM64 validation must pass
+before releasing this feature. See [native analyzer](native-analyzer/README.md)
+for the exact validation status and measured limitations.
+
+Local Linux development (Python is for building/exporting only):
+
+```sh
+uv venv --python 3.13 .venv-analyzer
+uv pip install --python .venv-analyzer/bin/python torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv-analyzer/bin/python --index-strategy unsafe-best-match -r native-analyzer/tools/requirements.lock.txt
+.venv-analyzer/bin/python native-analyzer/tools/package.py
+# Existing local build tools also need a C++20 compiler and CMake 3.20+.
+go build -tags 'desktop production webkit2_41' -o ytaudio ./cmd/ytaudio
+./ytaudio
+```
+
+An unversioned executable next to `build/analyzer/install` finds that local
+component automatically. For `go run`, browser builds elsewhere, or custom build
+locations, set `YTAUDIO_ANALYZER_DIR` to the absolute component directory.
+Performance settings apply to the next analysis; all modes use the same models.
+Native drag and drop uses the original file path. The browser development UI
+uses a temporary upload (256 MB limit), cleaned up when the app closes.
+
+`dev` runs analyzer validation/build jobs without publishing releases. The release
+workflow includes separate analyzer/runtime and shared-model assets only after
+all required builds and validation jobs succeed.

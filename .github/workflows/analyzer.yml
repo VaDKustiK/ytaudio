@@ -1,0 +1,87 @@
+name: Analyzer
+on:
+  push:
+    branches: [dev]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  models:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -r native-analyzer/tools/requirements.lock.txt
+      - run: python native-analyzer/tools/prepare.py --target linux-amd64 --reference
+      - run: python native-analyzer/tools/package.py --models-only --skip-prepare
+      - name: Reference parity and native unit gates
+        run: |
+          cmake -S native-analyzer -B build/analyzer/cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/analyzer/cmake --parallel 2
+          ctest --test-dir build/analyzer/cmake --output-on-failure
+          python native-analyzer/tools/check_rhythm.py --reference build/analyzer/reference --checkpoint build/analyzer/final0.ckpt --binary build/analyzer/cmake/ytaudio-analyzer --models build/analyzer/models --report build/analyzer/rhythm-parity.json
+          python native-analyzer/tools/check_harmony.py --source build/analyzer/deps/key --binary build/analyzer/cmake/ytaudio-analyzer --models build/analyzer/models --report build/analyzer/harmony-parity.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ytaudio-analyzer-models
+          path: dist/ytaudio-models-*.zip
+  native:
+    needs: models
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: linux, arch: amd64, runner: ubuntu-22.04, python: x64, vc: x64}
+          - {os: linux, arch: arm64, runner: ubuntu-24.04-arm, python: arm64, vc: arm64}
+          - {os: darwin, arch: arm64, runner: macos-15, python: arm64, vc: arm64}
+          - {os: windows, arch: amd64, runner: windows-2022, python: x64, vc: x64}
+          - {os: windows, arch: arm64, runner: windows-11-arm, python: arm64, vc: arm64}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: ${{ matrix.vc }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ytaudio-analyzer-models
+          path: dist
+      - name: Verified native sources and SDK
+        run: python native-analyzer/tools/prepare.py --target ${{ matrix.os }}-${{ matrix.arch }}
+      - name: Shared models from validated export
+        run: python -c "import pathlib,zipfile; p=pathlib.Path('build/analyzer/models'); p.mkdir(parents=True,exist_ok=True); zipfile.ZipFile(next(pathlib.Path('dist').glob('ytaudio-models-*.zip'))).extractall(p)"
+      - name: Build, unit test, package and execute native smoke test
+        run: python native-analyzer/tools/package.py --os ${{ matrix.os }} --arch ${{ matrix.arch }} --skip-prepare --skip-export
+      - name: Native input safety gate
+        run: python native-analyzer/tools/check_inputs.py --binary build/analyzer/install/ytaudio-analyzer${{ runner.os == 'Windows' && '.exe' || '' }} --models build/analyzer/install/models
+      - name: Linux decoder integration
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          YTAUDIO_TEST_ANALYZER_DIR="$PWD/build/analyzer/install" go test ./internal/analyzer
+      - name: Browser integration gate
+        if: matrix.os == 'linux' && matrix.arch == 'amd64'
+        shell: bash
+        run: |
+          python -m pip install playwright==1.64.1
+          python -m playwright install --with-deps chromium
+          go build -o /tmp/ytaudio-browser ./cmd/ytaudio
+          python scripts/analyzer_ui_test.py --binary /tmp/ytaudio-browser --component build/analyzer/install
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ytaudio-analyzer-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/ytaudio-analyzer-*.zip

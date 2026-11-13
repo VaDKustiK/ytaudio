@@ -11,11 +11,12 @@ import (
 const DefaultPort = 8750
 
 type Config struct {
-	OutputFolder string `json:"output_folder"`
-	Format       string `json:"format"`
-	Proxy        string `json:"proxy"`
-	DailyCap     int    `json:"daily_cap"`
-	Port         int    `json:"port"`
+	AnalyzerPerformance string `json:"analyzer_performance"`
+	OutputFolder        string `json:"output_folder"`
+	Format              string `json:"format"`
+	Proxy               string `json:"proxy"`
+	DailyCap            int    `json:"daily_cap"`
+	Port                int    `json:"port"`
 }
 
 func Defaults() Config {
@@ -24,10 +25,11 @@ func Defaults() Config {
 		home = "."
 	}
 	return Config{
-		OutputFolder: filepath.Join(home, "Downloads"),
-		Format:       "mp3",
-		DailyCap:     30,
-		Port:         DefaultPort,
+		AnalyzerPerformance: "balanced",
+		OutputFolder:        filepath.Join(home, "Downloads"),
+		Format:              "mp3",
+		DailyCap:            30,
+		Port:                DefaultPort,
 	}
 }
 
@@ -58,6 +60,11 @@ func Load() (Config, error) {
 }
 
 func (c Config) Validate() error {
+	switch c.AnalyzerPerformance {
+	case "", "low", "balanced", "maximum":
+	default:
+		return fmt.Errorf("invalid analyzer performance mode")
+	}
 	if !filepath.IsAbs(c.OutputFolder) {
 		return fmt.Errorf("output folder is required")
 	}

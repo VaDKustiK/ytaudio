@@ -29,3 +29,6 @@ coverage.*
 __pycache__/
 *.pyc
 *.syso
+
+# Analyzer export environment (development only)
+.venv-analyzer/
