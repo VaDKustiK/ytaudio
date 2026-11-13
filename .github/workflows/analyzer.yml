@@ -17,7 +17,12 @@ jobs:
       - run: python -m pip install torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
       - run: python -m pip install -r native-analyzer/tools/requirements.lock.txt
       - run: python native-analyzer/tools/prepare.py --target linux-amd64 --reference
-      - run: python native-analyzer/tools/package.py --models-only --skip-prepare
+      - name: Model packaging and export regression tests
+        run: |
+          python native-analyzer/tools/test_packaging.py
+          python native-analyzer/tools/test_export_key.py
+      - name: Package canonical models and verify a fresh export
+        run: python native-analyzer/tools/package.py --models-only --skip-prepare
       - name: Reference parity and native unit gates
         run: |
           cmake -S native-analyzer -B build/analyzer/cmake -DCMAKE_BUILD_TYPE=Release
@@ -60,7 +65,9 @@ jobs:
           path: dist
       - name: Verified native sources and SDK
         run: python native-analyzer/tools/prepare.py --target ${{ matrix.os }}-${{ matrix.arch }}
-      - name: Shared models from validated export
+      - name: Canonical packaging integrity tests
+        run: python native-analyzer/tools/test_packaging.py
+      - name: Shared canonical models from validated package
         run: python -c "import pathlib,zipfile; p=pathlib.Path('build/analyzer/models'); p.mkdir(parents=True,exist_ok=True); zipfile.ZipFile(next(pathlib.Path('dist').glob('ytaudio-models-*.zip'))).extractall(p)"
       - name: Build, unit test, package and execute native smoke test
         run: python native-analyzer/tools/package.py --os ${{ matrix.os }} --arch ${{ matrix.arch }} --skip-prepare --skip-export

@@ -52,6 +52,9 @@ The analyzer packages redistribute these components with their license texts:
   repository: https://github.com/a1ex90/MusicalKeyCNN . No separate checkpoint
   license was found in the pinned revision; the repository license does not
   license or transfer ownership of the training audio.
+  The canonical ONNX export in `native-analyzer/models/` preserves that license
+  alongside the artifact. Packaging verifies its pinned SHA-256 on every target;
+  fresh exports are numerical checks and do not replace the shipped model.
 - ONNX Runtime CPU 1.23.2: MIT, with its own third-party notices.
   https://github.com/microsoft/onnxruntime
 - PocketFFT: BSD-3-Clause. https://github.com/mreineck/pocketfft

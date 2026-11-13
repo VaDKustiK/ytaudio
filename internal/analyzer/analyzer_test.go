@@ -146,4 +146,12 @@ func TestModelLockMatchesNativeArtifacts(t *testing.T) {
 			t.Fatalf("model hash mismatch for %s", name)
 		}
 	}
+	canonical := filepath.Join("..", "..", "native-analyzer", "models", "keynet.onnx")
+	digest, err := hashFile(context.Background(), canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if digest != modelDigests["keynet.onnx"] {
+		t.Fatal("canonical key model differs from the pinned artifact")
+	}
 }

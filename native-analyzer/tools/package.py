@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build/package the native component separately from the main app installer."""
 import argparse,hashlib,json,math,pathlib,platform,shutil,struct,subprocess,sys,tempfile,zipfile
-from prepare import ROOT,prepare
+from prepare import ROOT,prepare,prepare_key_model
 METADATA=json.loads((ROOT/"packaging/analyzer.json").read_text())
 ENGINE_VERSION=METADATA["engine_version"]
 MODELS_VERSION=METADATA["models_version"]
@@ -20,11 +20,19 @@ def archive(directory,destination):
 def package(goos,arch,skip_prepare,skip_export,python,models_only=False):
     target=f'{goos}-{arch}';deps=ROOT/'build/analyzer/deps';models=ROOT/'build/analyzer/models';build=ROOT/'build/analyzer/cmake'
     if not skip_prepare:prepare(target,ROOT/'build/analyzer/downloads')
-    if not skip_export:run([python,ROOT/'native-analyzer/tools/export_key.py','--source',deps/'key','--output',models/'keynet.onnx'])
+    # Even --skip-prepare uses the reviewed canonical artifact, not a stale
+    # locally exported file left in build storage.
+    prepare_key_model(models)
     expected=json.loads((ROOT/'native-analyzer/models.lock.json').read_text())
     if expected['version']!=MODELS_VERSION:raise ValueError('Model version metadata mismatch')
     for name in ('beat_this.onnx','keynet.onnx'):
         if digest(models/name)!=expected[name]:raise ValueError(f'Model hash mismatch: {name}')
+    if not skip_export:
+        candidate=ROOT/'build/analyzer/export-check/keynet.onnx'
+        run([python,ROOT/'native-analyzer/tools/export_key.py','--source',deps/'key','--output',candidate,'--reference',models/'keynet.onnx'])
+    # Older exports left a machine-specific parity report alongside the model.
+    # Reports belong in export-check; only model/provenance/license data ships.
+    (models/'keynet.json').unlink(missing_ok=True)
     notices=models/'licenses';notices.mkdir(exist_ok=True)
     shutil.copy2(deps/'beat/LICENSE',notices/'beat-this-cpp-MIT.txt')
     # The official project explicitly licenses final0 weights MIT.

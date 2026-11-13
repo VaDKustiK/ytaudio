@@ -63,7 +63,7 @@ A successful build does not replace fresh-install testing on the intended OS.
 
 ## Build locally
 
-Go 1.26+ is required; the module selects Go 1.27.3 automatically. Linux builds
+Go 1.26+ is required; the module selects Go 1.27.4 automatically. Linux builds
 also need a C compiler, `pkg-config`, GTK 3, and WebKitGTK 4.1 development files
 (`libgtk-3-dev`, `libwebkit2gtk-4.1-dev` on Debian/Ubuntu).
 
@@ -205,6 +205,12 @@ uv pip install --python .venv-analyzer/bin/python --index-strategy unsafe-best-m
 go build -tags 'desktop production webkit2_41' -o ytaudio ./cmd/ytaudio
 ./ytaudio
 ```
+
+Packaging uses the checked-in canonical key model and verifies its pinned hash.
+A fresh export is compared numerically in separate build storage, so differences
+in export serialization across machines cannot change the shipped artifact.
+`--skip-export` skips that development comparison when building with only Python's
+standard library; it keeps all packaged-model checksum checks enabled.
 
 An unversioned executable next to `build/analyzer/install` finds that local
 component automatically. For `go run`, browser builds elsewhere, or custom build

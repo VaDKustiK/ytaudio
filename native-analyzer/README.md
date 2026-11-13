@@ -115,11 +115,16 @@ Internal evidence scores are not calibrated correctness probabilities.
 ## Reproduce the local gates
 
 Use the CPU Python 3.13 environment described in the root README, a C++20
-compiler and CMake 3.20+. The pinned Python lock is tested on Linux; model export
-runs there once, and all five native jobs reuse its validated model artifact.
+compiler and CMake 3.20+. The pinned Python lock is tested on Linux. The reviewed
+canonical KeyNet ONNX is stored in `models/` with its upstream MIT license;
+every build checks its existing pinned SHA-256. Fresh exports go to
+`build/analyzer/export-check/` and are checked against PyTorch and the canonical
+artifact at 8–300 frames. They may have different hashes without affecting the
+packaged bytes. All five native jobs use the same validated model asset.
 Native packaging outside Linux only needs Python's standard library and models
-from that export. Windows packaging runs in a Visual Studio developer shell;
-macOS uses Apple's command-line tools and ad-hoc signing.
+from that asset (`--skip-export` skips only fresh-export comparison). Windows
+packaging runs in a Visual Studio developer shell; macOS uses Apple's command-line
+tools and ad-hoc signing.
 
 ```sh
 source .venv-analyzer/bin/activate
@@ -127,6 +132,8 @@ uv pip install --python .venv-analyzer/bin/python playwright==1.64.1
 export PLAYWRIGHT_BROWSERS_PATH="$PWD/build/analyzer/browsers"
 python -m playwright install chromium
 python native-analyzer/tools/prepare.py --target linux-amd64 --reference
+python native-analyzer/tools/test_packaging.py
+python native-analyzer/tools/test_export_key.py
 python native-analyzer/tools/package.py --skip-prepare
 ctest --test-dir build/analyzer/cmake --output-on-failure
 python native-analyzer/tools/check_rhythm.py --reference build/analyzer/reference --checkpoint build/analyzer/final0.ckpt --binary build/analyzer/install/ytaudio-analyzer --models build/analyzer/install/models --report build/analyzer/rhythm-parity.json
@@ -287,8 +294,8 @@ measurement, not a guarantee of zero idle CPU.
 
 Linux amd64 packages are approximately 8.0 MiB runtime ZIP + 73.5 MiB shared
 model ZIP, 103.1 MiB installed together. Exact byte sizes from this build:
-runtime ZIP 8424588; model ZIP 77032572;
-installed 108137690. No Python environment, GPU runtime or FFmpeg is bundled.
+runtime ZIP 8424588; model ZIP 77032145;
+installed 108136968. No Python environment, GPU runtime or FFmpeg is bundled.
 
 ## Native Linux WebView smoke test
 
@@ -345,6 +352,21 @@ packages use loader-relative ORT paths and ad-hoc signatures; Linux uses an
 executable-relative ORT path and the existing glibc release baselines. Inspection
 of the pinned Apple Silicon SDK confirms minimum macOS 13.4 and
 `@rpath/libonnxruntime.1.23.2.dylib`; its package ships that library once.
+
+The first dev CI run exposed host-dependent KeyNet export bytes: numerical
+parity passed, but the regenerated file did not match the local pinned hash.
+Packaging now retains the canonical artifact and validates fresh exports
+separately. Regression tests accept equivalent byte-different candidates and
+reject changed inference, tampered canonical models and tampered beat models.
+The canonical model and its Go/JSON digest pins remain unchanged.
+
+Secret scanning uses the full default Gitleaks rules. `.gitleaks.toml` adds one
+exception for the exact public KeyNet checksum in the two model-digest source
+paths. The security job tests that other values in those files and that same
+checksum outside those paths are still detected. Local history and current-source
+scans pass. These fixes still require a fresh dev CI run before merging.
+The security gate also identified GO-2026-6859 in Go 1.27.3; the module now
+selects the fixed Go 1.27.4 toolchain for local builds and CI.
 
 Before merging into `main`: run the dev CI matrix, test real native picker/drop,
 installation/repair and offline analysis on Windows/Linux/macOS, check signed or

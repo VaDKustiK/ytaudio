@@ -4,6 +4,16 @@ import argparse, hashlib, json, os, pathlib, platform, shutil, tarfile, tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 LOCK=json.loads((ROOT/'native-analyzer/sources.lock.json').read_text())
 
+def prepare_key_model(models):
+    # Exporting on each host is not guaranteed to produce identical ONNX bytes.
+    # Ship the reviewed artifact; never learn a new trusted hash from build output.
+    source=ROOT/'native-analyzer/models/keynet.onnx'
+    expected=json.loads((ROOT/'native-analyzer/models.lock.json').read_text())['keynet.onnx']
+    if hashlib.sha256(source.read_bytes()).hexdigest()!=expected:
+        raise ValueError('Canonical key model hash mismatch')
+    models.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(source,models/'keynet.onnx')
+
 def fetch(name, cache):
     entry=LOCK[name]; path=cache/name
     if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']: return path
@@ -64,6 +74,7 @@ def prepare(target,cache):
     source=deps/'beat/onnx/beat_this.onnx'
     if hashlib.sha256(source.read_bytes()).hexdigest()!=LOCK['beat_this.onnx']['sha256']:raise ValueError('Upstream beat model hash mismatch')
     shutil.copy2(source,models/'beat_this.onnx')
+    prepare_key_model(models)
     print(deps)
 
 if __name__=='__main__':
