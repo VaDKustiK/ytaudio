@@ -168,7 +168,7 @@ outside Git. Benchmarks identify their exact executable with SHA-256.
 | 2: rhythm implementation/reference parity | Passed local unit, model, FFT and chunk-boundary gates. Genre accuracy remains unverified. |
 | 3: harmony implementation/reference parity | Passed local CQT/model, class mapping, tuning, mixed/unknown and boundary tests. |
 | 4: integration and regressions | Passed local Go race tests, actual FFmpeg/native analysis and browser UI flows. Native Linux WebView analysis/copy/drop-event smoke test passed; physical dialog/drop still needs manual testing. |
-| 5: distribution/offline operation | Linux amd64 packaged execution, verified installation, repair, rollback-on-failure and model reuse passed. Other native targets await CI execution. |
+| 5: distribution/offline operation | Linux amd64 installation, repair, rollback and model reuse passed locally. Native package/input checks passed dev CI on Linux amd64/arm64 and macOS arm64. Windows requires a rerun with the MSVC fix. |
 | 6: resource/accuracy review | Generated-fixture evaluation and resource measurements complete. Independently labelled real-world beats and full native platform validation remain outstanding. |
 
 The commands above passed locally, including source-format tests for WAV, MP3,
@@ -337,16 +337,16 @@ ordinary downloader dependency repair remain separate.
 
 | Target | Go build checked locally | Packaged native analyzer execution |
 | --- | --- | --- |
-| Linux amd64 | Desktop, native WebView smoke | Passed |
-| Windows amd64 | Desktop cross-build | Pending native CI/manual testing |
-| Windows arm64 | Desktop cross-build | Pending native CI/manual testing |
-| macOS arm64, analyzer requires 13.4+ | Browser/core cross-build only | Pending native CI/manual testing |
-| Linux arm64 | Browser/core cross-build only | Pending native CI/manual testing |
+| Linux amd64 | Desktop, native WebView smoke | Passed locally and in dev CI |
+| Windows amd64 | Desktop cross-build | MSVC header fix awaiting native CI rerun |
+| Windows arm64 | Desktop cross-build | MSVC header fix awaiting native CI rerun |
+| macOS arm64, analyzer requires 13.4+ | Browser/core cross-build only | Packaged CLI/input checks passed dev CI; manual UI testing pending |
+| Linux arm64 | Browser/core cross-build only | Packaged CLI/input checks passed dev CI; manual UI testing pending |
 
 SDK archives for all five targets are hash-pinned. The native CI matrix builds
-and executes unit/input/package smoke tests on actual target runners; workflows
-were validated with actionlint, but were not pushed/run remotely during this
-session. Production POSIX executables are stripped before hashing/signing. Windows
+and executes unit/input/package smoke tests on actual target runners. Workflow
+definitions are checked with actionlint. Production POSIX executables are stripped
+before hashing/signing. Windows
 packages exclude debug symbols and carry app-local permitted VC runtime DLLs; macOS
 packages use loader-relative ORT paths and ad-hoc signatures; Linux uses an
 executable-relative ORT path and the existing glibc release baselines. Inspection
@@ -364,9 +364,17 @@ Secret scanning uses the full default Gitleaks rules. `.gitleaks.toml` adds one
 exception for the exact public KeyNet checksum in the two model-digest source
 paths. The security job tests that other values in those files and that same
 checksum outside those paths are still detected. Local history and current-source
-scans pass. These fixes still require a fresh dev CI run before merging.
+scans pass, and the dev CI security check now passes too.
 The security gate also identified GO-2026-6859 in Go 1.27.3; the module now
 selects the fixed Go 1.27.4 toolchain for local builds and CI.
+
+The following dev run passed model packaging, security, macOS ARM64 and both
+Linux native jobs, but exposed an MSVC header conflict in the Windows builds.
+Windows targets now define `NOMINMAX`; MSVC targets also use `/Zc:__cplusplus`
+so r8brain selects its modern C++ implementation. The native platform regression
+test includes the Windows SDK before r8brain/PocketFFT, checks the standard
+version and absence of min/max macros, and exercises the resampler. Both Windows
+architectures still need a fresh successful native CI run with these flags.
 
 Before merging into `main`: run the dev CI matrix, test real native picker/drop,
 installation/repair and offline analysis on Windows/Linux/macOS, check signed or

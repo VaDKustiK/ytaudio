@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.20)
 project(ytaudio_analyzer LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# r8brain selects its C++11 mutex/headers using __cplusplus. MSVC otherwise
+# reports C++98 even with /std:c++20 and enters its legacy Windows.h branch.
+if(MSVC)
+  add_compile_options(/Zc:__cplusplus /utf-8)
+endif()
+# Windows SDK min/max macros conflict with PocketFFT and the standard library.
+# Set this before any header is parsed, for every Windows target/architecture.
+if(WIN32)
+  add_compile_definitions(NOMINMAX)
+endif()
 set(DEPS "${CMAKE_CURRENT_SOURCE_DIR}/../build/analyzer/deps" CACHE PATH "Verified dependencies")
 set(ORT_ROOT "${DEPS}/ort" CACHE PATH "ONNX Runtime CPU SDK")
 add_library(onnxruntime SHARED IMPORTED)
@@ -22,7 +32,7 @@ target_compile_definitions(ytaudio-analyzer PRIVATE YTAUDIO_ENGINE_VERSION="${EN
 target_link_libraries(ytaudio-analyzer PRIVATE onnxruntime)
 # The upstream inference translation unit uses memcpy without including cstring.
 if(MSVC)
-  target_compile_options(ytaudio-analyzer PRIVATE /utf-8 /FIcstring)
+  target_compile_options(ytaudio-analyzer PRIVATE /FIcstring)
 else()
   target_compile_options(ytaudio-analyzer PRIVATE -include cstring)
   target_link_libraries(ytaudio-analyzer PRIVATE ${CMAKE_DL_LIBS})
@@ -40,3 +50,6 @@ install(TARGETS ytaudio-analyzer RUNTIME DESTINATION .)
 add_executable(harmony-test tests/harmony_test.cpp)
 target_include_directories(harmony-test PRIVATE src "${DEPS}/pocketfft")
 add_test(NAME harmony COMMAND harmony-test)
+add_executable(platform-test tests/platform_test.cpp)
+target_include_directories(platform-test PRIVATE "${DEPS}/r8brain" "${DEPS}/pocketfft")
+add_test(NAME platform COMMAND platform-test)
