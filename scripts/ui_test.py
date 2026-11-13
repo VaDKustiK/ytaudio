@@ -125,7 +125,7 @@ def test(binary, screenshots):
                 page.screenshot(path=str(screenshots / "mobile-dark.png"),full_page=True)
                 for width in (390,640,760,1100):
                     page.set_viewport_size({"width":width,"height":800})
-                    for section in ("settings","info","downloader"):
+                    for section in ("settings","info","downloader","analyzer"):
                         page.locator(f'[data-page="{section}"]').click()
                         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),(width,section)
                         bell=page.locator("#bell").bounding_box()

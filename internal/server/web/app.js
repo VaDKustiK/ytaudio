@@ -18,7 +18,7 @@ async function api(path, method = "GET", body) {
 }
 function feedback(selector, message, error = false) { const node = $(selector); node.textContent = message; node.classList.toggle("error", error); }
 function showPage(page) {
-  if (!["downloader", "settings", "info"].includes(page)) page = "downloader";
+  if (!["downloader", "analyzer", "settings", "info"].includes(page)) page = "downloader";
   selectedPage = page;
   document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== `page-${page}`; });
   document.querySelectorAll("[data-page]").forEach(button => {
@@ -56,6 +56,7 @@ function applySettings(data) {
   $("#default-format").value = data.format;
   $("#proxy").value = data.proxy;
   $("#daily-cap").value = data.daily_cap;
+  $("#analyzer-performance").value = data.analyzer_performance || "balanced";
   $("#format").value = data.format;
   $("#destination").textContent = data.output_folder;
   formatHelp();
@@ -63,7 +64,7 @@ function applySettings(data) {
 $("#settings-form").addEventListener("submit", async event => {
   event.preventDefault(); $("#save-settings").disabled = true;
   try {
-    const data = await api("/api/settings", "PUT", {...settings, output_folder: $("#output-folder").value.trim(), format: $("#default-format").value, proxy: $("#proxy").value.trim(), daily_cap: Number($("#daily-cap").value)});
+    const data = await api("/api/settings", "PUT", {...settings, output_folder: $("#output-folder").value.trim(), format: $("#default-format").value, proxy: $("#proxy").value.trim(), daily_cap: Number($("#daily-cap").value), analyzer_performance: $("#analyzer-performance").value});
     applySettings(data); feedback("#settings-message", "Preferences saved.");
   } catch (error) { feedback("#settings-message", error.message, true); }
   finally { $("#save-settings").disabled = false; }
@@ -127,7 +128,18 @@ function renderJobs(jobs) {
         catch (error) { feedback("#download-message", error.message, true); }
         finally { cancel.disabled = false; }
       });
-      body.append(title, message, progress); row.append(icon, body, cancel); rows.set(job.id, row); $("#jobs").append(row);
+      const files = document.createElement("div"); files.className = "job-files";
+      body.append(title, message, progress, files); row.append(icon, body, cancel); rows.set(job.id, row); $("#jobs").append(row);
+    }
+    const files = row.querySelector(".job-files");
+    const signature = job.state === "complete" ? JSON.stringify(job.files || []) : "";
+    if (files.dataset.signature !== signature) {
+      files.dataset.signature = signature; files.replaceChildren();
+      if (job.state === "complete") for (const file of job.files || []) {
+        const analyze = document.createElement("button"); analyze.className = "secondary";
+        analyze.textContent = job.files.length > 1 ? `BPM and key detection: ${file.name}` : "BPM and key detection";
+        analyze.addEventListener("click", () => selectAnalysisFile(file, true)); files.append(analyze);
+      }
     }
     row.className = `job ${job.state}`;
     row.querySelector(".job-icon").textContent = job.format.toUpperCase();
@@ -137,8 +149,8 @@ function renderJobs(jobs) {
     row.querySelector(".job-message").textContent = job.message + (active ? detail : "");
     const progress = row.querySelector("progress"); progress.hidden = job.state !== "running";
     if (job.progress.stage === "downloading" || job.progress.stage === "saved") progress.value = job.progress.percent; else progress.removeAttribute("value");
-    row.querySelector("button").textContent = active ? "Cancel" : "Dismiss";
-    row.querySelector("button").setAttribute("aria-label", `${active ? "Cancel" : "Dismiss"} ${job.format} download`);
+    row.querySelector(":scope > button").textContent = active ? "Cancel" : "Dismiss";
+    row.querySelector(":scope > button").setAttribute("aria-label", `${active ? "Cancel" : "Dismiss"} ${job.format} download`);
   }
 }
 async function refresh() {
@@ -146,6 +158,7 @@ async function refresh() {
   try {
     const [data, jobs] = await Promise.all([api("/api/diagnostics"), api("/api/jobs")]);
     renderDiagnostics(data); renderJobs(jobs);
+    if (typeof refreshAnalysis === "function") await refreshAnalysis();
     if (!releases || releases.checking) renderReleases(await api("/api/app-update"));
   } catch { feedback("#download-message", "Connection to the app was interrupted. Reconnecting…", true); }
   finally { polling = false; }

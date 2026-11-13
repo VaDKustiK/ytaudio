@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/VaDKustiK/ytaudio/internal/analyzer"
 	"github.com/VaDKustiK/ytaudio/internal/config"
 	"github.com/VaDKustiK/ytaudio/internal/deps"
 	"github.com/VaDKustiK/ytaudio/internal/queue"
@@ -41,13 +42,14 @@ type SetupState struct {
 	Error   string  `json:"error,omitempty"`
 }
 type Job struct {
-	ID       string         `json:"id"`
-	URL      string         `json:"url"`
-	Format   ytdlp.Format   `json:"format"`
-	State    string         `json:"state"`
-	Message  string         `json:"message"`
-	Progress ytdlp.Progress `json:"progress"`
-	Created  time.Time      `json:"created"`
+	Files    []analyzer.File `json:"files,omitempty"`
+	ID       string          `json:"id"`
+	URL      string          `json:"url"`
+	Format   ytdlp.Format    `json:"format"`
+	State    string          `json:"state"`
+	Message  string          `json:"message"`
+	Progress ytdlp.Progress  `json:"progress"`
+	Created  time.Time       `json:"created"`
 	cancel   context.CancelFunc
 }
 type Server struct {
@@ -66,6 +68,8 @@ type Server struct {
 	wg                     sync.WaitGroup
 	closeOnce              sync.Once
 	closed                 bool
+	analysis               *analyzer.Manager
+	pickAudio              func() (string, error)
 	pickFolder             func() (string, error)
 	openFolder             func(string) error
 	openURL                func(string)
@@ -146,7 +150,11 @@ func (s *Server) Close() {
 		s.mu.Lock()
 		s.closed = true
 		s.cancel()
+		analysis := s.analysis
 		s.mu.Unlock()
+		if analysis != nil {
+			analysis.Close()
+		}
 		s.queue.Close()
 		s.wg.Wait()
 	})
@@ -172,6 +180,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/", s.index)
 	files, _ := fs.Sub(webFiles, "web")
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(files))))
+	mux.HandleFunc("/api/analysis", s.analysisHandler)
+	mux.HandleFunc("/api/analysis/select", s.analysisSelect)
+	mux.HandleFunc("/api/analysis/pick", s.analysisPick)
+	mux.HandleFunc("/api/analysis/upload", s.analysisUpload)
+	mux.HandleFunc("/api/analysis/install", s.analysisInstall)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("/api/diagnostics", s.diagnostics)
 	mux.HandleFunc("/api/settings", s.settings)
@@ -250,15 +263,25 @@ func (s *Server) diagnostics(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	analysis := map[string]any{"version": analyzer.Version, "models": analyzer.ModelsVersion, "ready": false}
+	if s.analysis != nil {
+		state := s.analysis.Snapshot()
+		analysis["ready"] = state.Ready
+		analysis["status"] = state.Status
+		analysis["error"] = s.redact(state.Error)
+		analysis["install_error"] = s.redact(state.InstallError)
+		analysis["last_log"] = s.redact(s.analysis.LastLog())
+	}
 	writeJSON(w, struct {
-		Version      string        `json:"version"`
-		OS           string        `json:"os"`
-		Arch         string        `json:"arch"`
-		Setup        SetupState    `json:"setup"`
-		Dependencies []deps.Status `json:"dependencies"`
-		Ready        bool          `json:"ready"`
-		LastLog      string        `json:"last_log"`
-	}{s.version, runtime.GOOS, runtime.GOARCH, s.setup, s.statuses, s.readyLocked(), s.redact(s.lastLog)})
+		Analyzer     map[string]any `json:"analyzer"`
+		Version      string         `json:"version"`
+		OS           string         `json:"os"`
+		Arch         string         `json:"arch"`
+		Setup        SetupState     `json:"setup"`
+		Dependencies []deps.Status  `json:"dependencies"`
+		Ready        bool           `json:"ready"`
+		LastLog      string         `json:"last_log"`
+	}{analysis, s.version, runtime.GOOS, runtime.GOARCH, s.setup, s.statuses, s.readyLocked(), s.redact(s.lastLog)})
 }
 func (s *Server) redact(raw string) string {
 	if s.cfg.OutputFolder != "" {
@@ -286,12 +309,27 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.cfg)
 		return
 	}
-	if s.busyLocked() {
-		http.Error(w, "Wait for downloads or setup to finish before changing settings.", http.StatusConflict)
-		return
-	}
 	var cfg config.Config
 	if !decode(w, r, &cfg) {
+		return
+	}
+	if s.busyLocked() {
+		current := s.cfg
+		current.AnalyzerPerformance = cfg.AnalyzerPerformance
+		if cfg != current {
+			http.Error(w, "Wait for downloads or setup to finish before changing download settings.", http.StatusConflict)
+			return
+		}
+		if err := cfg.Validate(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := cfg.Save(); err != nil {
+			http.Error(w, "Unable to save settings.", http.StatusInternalServerError)
+			return
+		}
+		s.cfg = cfg
+		writeJSON(w, cfg)
 		return
 	}
 	if err := cfg.Validate(); err != nil {
@@ -312,6 +350,9 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg = cfg
+	if s.analysis != nil {
+		s.analysis.SetProxy(cfg.Proxy)
+	}
 	s.deps = manager
 	s.queue.SetLimit(cfg.DailyCap)
 	writeJSON(w, cfg)
@@ -532,6 +573,22 @@ func (s *Server) run(ctx context.Context, job *Job, manager *deps.Manager, execu
 	report := func(p ytdlp.Progress) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if p.Stage == "saved" && p.File != "" {
+			if analysis, e := s.analyzerLocked(); e == nil {
+				if file, e := analysis.Register(p.File, false); e == nil {
+					found := false
+					for _, saved := range job.Files {
+						if saved.ID == file.ID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						job.Files = append(job.Files, file)
+					}
+				}
+			}
+		}
 		p.File = filepath.Base(p.File)
 		if p.File == "." {
 			p.File = ""

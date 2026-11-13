@@ -1,0 +1,2 @@
+# Canonical model bytes must survive checkout unchanged on Windows/macOS/Linux.
+native-analyzer/models/*.onnx binary

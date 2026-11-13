@@ -364,3 +364,6 @@ func (m *Manager) CheckDaily(ctx context.Context) (bool, error) {
 	version := commandVersion(ctx, path)
 	return version != "" && version < release.Tag, nil
 }
+
+// FFmpegPath resolves the decoder already managed by the app.
+func (m *Manager) FFmpegPath() string { return m.toolPath("ffmpeg") }

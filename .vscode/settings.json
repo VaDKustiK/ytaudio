@@ -3,5 +3,6 @@
     "buildFlags": [
       "-tags=desktop production webkit2_41"
     ]
-  }
+  },
+  "cmake.sourceDirectory": "/home/kust/VS_Projects/ytaudio/native-analyzer"
 }

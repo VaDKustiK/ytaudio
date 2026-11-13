@@ -13,6 +13,7 @@
 <a class="brand" href="#downloader" aria-label="ytaudio home"><img class="brand-logo" src="/static/icon.png" alt="" width="34" height="34">ytaudio</a>
 <nav aria-label="Main navigation">
 <button class="nav-item active" data-page="downloader" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>Downloader</button>
+<button class="nav-item" data-page="analyzer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4m4-9v14m4-11v8m4-13v18m4-11v4"/></svg>BPM and key detector</button>
 <button class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>Settings</button>
 <button class="nav-item" data-page="info"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>Info</button>
 </nav>
@@ -35,11 +36,22 @@
 <div class="queue-heading"><h2>Downloads <span id="queue-count" class="count">0</span></h2><button id="open-folder" class="text-button">Open folder ↗</button></div>
 <div id="jobs" aria-label="Current session downloads"><div class="empty-state"><span class="empty-icon" aria-hidden="true">♫</span><p>Your next listen starts here.</p><span class="small muted">Downloads will appear here while this app is open.</span></div></div>
 </section>
+<section id="page-analyzer" class="page" aria-labelledby="analyzer-heading" hidden>
+<div class="page-heading"><h1 id="analyzer-heading">BPM and key detector</h1></div>
+<div class="panel analyzer-panel">
+<div id="audio-drop" class="audio-drop" tabindex="0" role="button" aria-label="Choose audio or drop one audio file"><span id="audio-name">Drop audio here</span><button id="choose-audio" type="button" class="secondary">Choose audio…</button></div>
+<input id="audio-file" type="file" accept="audio/*,.m4a,.opus,.webm" hidden>
+<div class="button-row"><button id="analyze-audio" class="primary" disabled>Analyze</button><button id="cancel-analysis" class="secondary" hidden>Cancel</button><button id="install-analyzer" class="secondary" hidden>Install analyzer</button><button id="copy-analysis" class="text-button" hidden>Copy results</button></div>
+<p id="analysis-message" class="feedback" role="status" aria-live="polite"></p>
+<progress id="analysis-progress" max="100" aria-label="Analysis progress" hidden></progress>
+<dl id="analysis-results" class="analysis-results" hidden><div><dt>Tempo</dt><dd><span id="analysis-tempo">—</span><p id="analysis-tempo-alt" class="small muted"></p></dd></div><div><dt>Key</dt><dd><span id="analysis-key">—</span><p id="analysis-key-alt" class="small muted"></p></dd></div><div><dt>Tuning</dt><dd id="analysis-tuning">—</dd></div></dl>
+</div></section>
 <section id="page-settings" class="page" aria-labelledby="settings-heading" hidden>
 <div class="page-heading"><h1 id="settings-heading">Settings</h1></div>
 <form id="settings-form" class="panel settings-panel">
 <label for="output-folder">Download folder</label><div class="input-with-button"><input id="output-folder" name="output_folder" required spellcheck="false"><button id="choose-folder" type="button" class="secondary">Choose…</button></div>
 <label for="default-format">Default format</label><select id="default-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
+<label for="analyzer-performance">Analyzer performance</label><select id="analyzer-performance"><option value="low">Low impact</option><option value="balanced">Balanced</option><option value="maximum">Maximum speed</option></select>
 <details><summary>Connection &amp; queue</summary><label for="proxy">Proxy URL <span class="muted">(optional)</span></label><input id="proxy" name="proxy" type="password" autocomplete="off" placeholder="http://127.0.0.1:8080"><p class="field-help">Used for downloads, tool setup, and release checks. Leave blank for your normal connection.</p><label for="daily-cap">Download jobs per session</label><input id="daily-cap" name="daily_cap" type="number" min="1" max="10000" required><p class="field-help">A playlist is one job, capped at 100 videos.</p></details>
 <div class="form-bottom"><p id="settings-message" class="feedback" role="status" aria-live="polite"></p><button id="save-settings" class="primary" type="submit">Save preferences</button></div>
 </form></section>
@@ -53,5 +65,6 @@
 </div></div>
 <dialog id="playlist-dialog"><h2>Download this playlist?</h2><p>Up to 100 videos will be processed, one at a time. You can cancel at any point.</p><div class="button-row"><button id="playlist-no" class="secondary">Go back</button><button id="playlist-yes" class="primary">Download playlist</button></div></dialog>
 <script src="/static/app.js" defer></script>
+<script src="/static/analyzer.js" defer></script>
 </body></html>
 {{end}}
