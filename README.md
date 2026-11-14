@@ -1,6 +1,6 @@
 # ytaudio
 
-A local desktop app for saving YouTube audio. No account, hosted download server,
+A local desktop app for saving YouTube and SoundCloud audio. No account, hosted download server,
 analytics, or telemetry. It uses established tools: yt-dlp, FFmpeg/FFprobe, Deno,
 and Wails. Requests come from your computer.
 
@@ -9,12 +9,12 @@ and Wails. Requests come from your computer.
 1. Install the package for your operating system and processor.
 2. Open **ytaudio**. Download tools install automatically on first launch; an internet connection is required. If setup fails, check **Info** and choose **Set up / repair**.
 3. Select your download folder in **Settings**.
-4. Paste a video or playlist link, choose a format, and select **Download audio**.
+4. Open **YouTube downloader** or **SoundCloud downloader**, paste a track/video or playlist link, choose a format, and select **Download audio**.
 
 The queue runs one job at a time. You can cancel a job or dismiss its result.
 There is no saved history: the queue disappears when the app closes. Playlists
-require confirmation and contain at most 100 videos. The optional session job
-limit is a courtesy control, not a guarantee against YouTube rate limits.
+require confirmation and contain at most 100 tracks. The optional session job
+limit is a courtesy control, not a guarantee against provider rate limits.
 
 | Format | What it does |
 | --- | --- |
@@ -23,11 +23,20 @@ limit is a courtesy control, not a guarantee against YouTube rate limits.
 | FLAC | Losslessly encodes the decoded audio. Does not restore source quality. |
 | OGG | Highest-quality Vorbis conversion; another lossy encoding step. |
 
-Every format starts with the best audio available from YouTube. YouTube has
-already compressed the uploader's audio. MP3/OGG conversion cannot promise
-identical quality; WAV/FLAC cannot recover information YouTube removed. Text
+Every format starts with the best full audio available without signing in.
+Platforms usually compress the uploader's audio. MP3/OGG conversion cannot
+promise identical quality; WAV/FLAC cannot recover information lost in the source. Text
 metadata is added when supported. Artwork is never downloaded or embedded;
 each download saves only the audio file.
+
+**SoundCloud:** tracks, playlists/albums (`/sets/…`), and mobile share links
+(`on.soundcloud.com` / `snd.sc`) use the same tools and audio formats as YouTube.
+No account, API key, cookie import, or extra installation is needed. Profile,
+likes, and search pages are not download links. Playlists require confirmation;
+both tabs share one queue and the download folder in Settings. Tracks that need
+an account/subscription, have DRM, or provide only a preview show an error;
+previews are never saved as full songs. If a playlist fails after saving some
+tracks, those audio files and their BPM/key buttons remain available.
 
 **Updates:** the bell lists newer stable GitHub releases. Selecting one opens
 its release page in your browser so you can download the new installer. Updates
@@ -120,7 +129,7 @@ should stay on other branches until it is ready for friends.
 go test -race ./...
 go vet ./...
 go vet -tags 'desktop production webkit2_41' ./...
-YTAUDIO_MEDIA_TESTS=1 go test ./internal/ytdlp -run TestLocalAudioConversion -v
+YTAUDIO_MEDIA_TESTS=1 go test ./internal/ytdlp -run 'TestLocalAudioConversion|TestSoundCloudRejectsPreviewFormats' -v
 ```
 
 Prepare local media-test tools separately (they are never embedded):
@@ -130,7 +139,7 @@ python3 scripts/prepare_assets.py --os linux --arch amd64 --output internal/deps
 ```
 
 The media test uses these Linux tools and a generated local sine wave,
-without contacting YouTube. UI regressions use Python Playwright:
+without contacting YouTube or SoundCloud. UI regressions use Python Playwright:
 
 ```sh
 pip install playwright==1.64.1
@@ -152,7 +161,7 @@ latest download error is retained as a bounded diagnostic log. The app redacts
 its known home/output paths and configured proxy URL; inspect copied logs
 before sharing them. No diagnostics are uploaded automatically.
 
-If a video fails, try **Info → Update yt-dlp**. For missing/broken tools, use
+If a track/video fails, try **Info → Update yt-dlp**. For missing/broken tools, use
 **Set up / repair**. Bot checks, private/age-restricted videos, region blocks,
 and rate limits may still prevent a download. The app does not import browser
 cookies or bypass sign-in. Check your connection and optional proxy setting.
@@ -163,7 +172,7 @@ Linux that is usually `~/.cache/ytaudio/bin`. Settings live in the platform's
 user config directory under `ytaudio/config.json`. Updated tools are preserved
 across app restarts. Do not delete the cache while a download is running.
 
-Network access includes YouTube and its media/image delivery domains, GitHub's
+Network access includes YouTube, SoundCloud and their media delivery domains, GitHub's
 API and release/CDN endpoints for tool/app updates, and any configured proxy.
 The operating system's WebView may have its own runtime update behavior.
 There is no central download relay. See
@@ -175,7 +184,7 @@ security concerns privately to the repository maintainer, without posting secret
 or personal download logs in public issues.
 
 Use only where you have the necessary permission and respect copyright and
-YouTube's terms. Desktop distribution does not itself grant downloading rights.
+the platforms' terms. Desktop distribution does not itself grant downloading rights.
 
 ## BPM, key and tuning (development)
 

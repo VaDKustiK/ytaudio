@@ -2,11 +2,16 @@
 const $ = (selector) => document.querySelector(selector);
 const token = $('meta[name="ytaudio-token"]').content;
 let settings, diagnostics, releases, submitting = false, polling = false, selectedPage = "downloader";
-const rows = new Map();
+const downloaders = [
+  {page: "downloader", source: "youtube", prefix: "", rows: new Map()},
+  {page: "soundcloud", source: "soundcloud", prefix: "sc-", rows: new Map()}
+];
+const downloadNode = (view, id) => $(`#${view.prefix}${id}`);
+const downloadFeedback = (view, message, error = false) => feedback(`#${view.prefix}download-message`, message, error);
 const descriptions = {
   mp3: "Best-quality VBR MP3. Plays almost everywhere; converting adds a lossy encoding step.",
-  wav: "Uncompressed audio. No further lossy encoding, but much larger files. Does not restore quality YouTube removed.",
-  flac: "Lossless encoding of YouTube’s decoded audio. Larger files; no added quality over the YouTube source.",
+  wav: "Uncompressed audio. No further lossy encoding, but much larger files. Does not restore quality lost in the source.",
+  flac: "Lossless encoding of the decoded audio. Larger files; no added quality over the source.",
   ogg: "High-quality OGG Vorbis audio. A lossy conversion, with broad support in open-source players."
 };
 async function api(path, method = "GET", body) {
@@ -18,7 +23,7 @@ async function api(path, method = "GET", body) {
 }
 function feedback(selector, message, error = false) { const node = $(selector); node.textContent = message; node.classList.toggle("error", error); }
 function showPage(page) {
-  if (!["downloader", "analyzer", "settings", "info"].includes(page)) page = "downloader";
+  if (!["downloader", "soundcloud", "analyzer", "settings", "info"].includes(page)) page = "downloader";
   selectedPage = page;
   document.querySelectorAll(".page").forEach(node => { node.hidden = node.id !== `page-${page}`; });
   document.querySelectorAll("[data-page]").forEach(button => {
@@ -30,26 +35,28 @@ function showPage(page) {
 document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.page)));
 document.querySelectorAll("[data-goto]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.goto)));
 $(".brand").addEventListener("click", event => { event.preventDefault(); showPage("downloader"); });
-function formatHelp() { $("#format-help").textContent = descriptions[$("#format").value]; }
-$("#format").addEventListener("change", formatHelp);
-$("#paste-url").addEventListener("click", async () => {
-  const button = $("#paste-url"), field = $("#url");
-  button.disabled = true;
-  try {
-    const text = window.runtime?.ClipboardGetText
-      ? await window.runtime.ClipboardGetText()
-      : await navigator.clipboard.readText();
-    if (!text.trim()) { feedback("#download-message", "Clipboard is empty.", true); return; }
-    field.value = text.trim();
-    field.dispatchEvent(new Event("input", {bubbles: true}));
-    feedback("#download-message", "");
-  } catch {
-    feedback("#download-message", "Clipboard access is unavailable. Paste into the link field using your keyboard.", true);
-  } finally {
-    button.disabled = false;
-    field.focus();
-  }
-});
+function formatHelp(view) { downloadNode(view, "format-help").textContent = descriptions[downloadNode(view, "format").value]; }
+for (const view of downloaders) {
+  downloadNode(view, "format").addEventListener("change", () => formatHelp(view));
+  downloadNode(view, "paste-url").addEventListener("click", async () => {
+    const button = downloadNode(view, "paste-url"), field = downloadNode(view, "url");
+    button.disabled = true;
+    try {
+      const text = window.runtime?.ClipboardGetText
+        ? await window.runtime.ClipboardGetText()
+        : await navigator.clipboard.readText();
+      if (!text.trim()) { downloadFeedback(view, "Clipboard is empty.", true); return; }
+      field.value = text.trim();
+      field.dispatchEvent(new Event("input", {bubbles: true}));
+      downloadFeedback(view, "");
+    } catch {
+      downloadFeedback(view, "Clipboard access is unavailable. Paste into the link field using your keyboard.", true);
+    } finally { button.disabled = false; field.focus(); }
+  });
+  downloadNode(view, "open-folder").addEventListener("click", async () => {
+    try { await api("/api/open-folder", "POST"); } catch (error) { downloadFeedback(view, error.message, true); }
+  });
+}
 function applySettings(data) {
   settings = data;
   $("#output-folder").value = data.output_folder;
@@ -57,9 +64,11 @@ function applySettings(data) {
   $("#proxy").value = data.proxy;
   $("#daily-cap").value = data.daily_cap;
   $("#analyzer-performance").value = data.analyzer_performance || "balanced";
-  $("#format").value = data.format;
-  $("#destination").textContent = data.output_folder;
-  formatHelp();
+  for (const view of downloaders) {
+    downloadNode(view, "format").value = data.format;
+    downloadNode(view, "destination").textContent = data.output_folder;
+    formatHelp(view);
+  }
 }
 $("#settings-form").addEventListener("submit", async event => {
   event.preventDefault(); $("#save-settings").disabled = true;
@@ -75,9 +84,6 @@ $("#choose-folder").addEventListener("click", async () => {
   catch (error) { feedback("#settings-message", error.message, true); }
   finally { $("#choose-folder").disabled = false; }
 });
-$("#open-folder").addEventListener("click", async () => {
-  try { await api("/api/open-folder", "POST"); } catch (error) { feedback("#download-message", error.message, true); }
-});
 function renderDiagnostics(data) {
   diagnostics = data;
   $("#app-version").textContent = data.version === "dev" ? "Development build" : data.version;
@@ -89,9 +95,11 @@ function renderDiagnostics(data) {
   $("#tools-badge").textContent = data.setup.running ? "Working…" : data.ready ? "Ready" : "Setup needed";
   $("#setup-button").disabled = data.setup.running;
   $("#update-tools").disabled = data.setup.running || !data.ready;
-  $("#download-button").disabled = submitting || data.setup.running || !data.ready;
-  $("#setup-banner").hidden = data.ready && !data.setup.running;
-  $("#setup-banner-text").textContent = data.setup.running ? data.setup.message : "A quick setup is needed before your first download.";
+  for (const view of downloaders) {
+    downloadNode(view, "download-button").disabled = submitting || data.setup.running || !data.ready;
+    downloadNode(view, "setup-banner").hidden = data.ready && !data.setup.running;
+    downloadNode(view, "setup-banner-text").textContent = data.setup.running ? data.setup.message : "A quick setup is needed before your first download.";
+  }
   const list = $("#dependencies"); list.replaceChildren();
   for (const dep of data.dependencies || []) {
     const li = document.createElement("li"), name = document.createElement("strong"), version = document.createElement("span");
@@ -100,17 +108,21 @@ function renderDiagnostics(data) {
     li.append(name, version); list.append(li);
   }
 }
-function renderJobs(jobs) {
-  $("#queue-count").textContent = jobs.filter(j => ["queued", "running"].includes(j.state)).length;
+function renderJobs(allJobs) {
+  for (const view of downloaders) renderDownloadJobs(allJobs.filter(job => (job.source || "youtube") === view.source), view);
+}
+function renderDownloadJobs(jobs, view) {
+  const rows = view.rows, container = downloadNode(view, "jobs");
+  downloadNode(view, "queue-count").textContent = jobs.filter(j => ["queued", "running"].includes(j.state)).length;
   const ids = new Set(jobs.map(j => j.id));
   for (const [id, row] of rows) if (!ids.has(id)) { row.remove(); rows.delete(id); }
-  $("#jobs .empty-state")?.remove();
+  container.querySelector(".empty-state")?.remove();
   if (!jobs.length) {
     const empty = document.createElement("div"); empty.className = "empty-state";
     const icon = document.createElement("span"); icon.className = "empty-icon"; icon.textContent = "♫";
     const text = document.createElement("p"); text.textContent = "Your next listen starts here.";
     const help = document.createElement("span"); help.className = "small muted"; help.textContent = "Downloads will appear here while this app is open.";
-    empty.append(icon, text, help); $("#jobs").append(empty);
+    empty.append(icon, text, help); container.append(empty);
   }
   for (const job of jobs) {
     let row = rows.get(job.id);
@@ -125,17 +137,17 @@ function renderJobs(jobs) {
       cancel.addEventListener("click", async () => {
         cancel.disabled = true;
         try { await api(`/api/jobs/${job.id}`, "DELETE"); await refresh(); }
-        catch (error) { feedback("#download-message", error.message, true); }
+        catch (error) { downloadFeedback(view, error.message, true); }
         finally { cancel.disabled = false; }
       });
       const files = document.createElement("div"); files.className = "job-files";
-      body.append(title, message, progress, files); row.append(icon, body, cancel); rows.set(job.id, row); $("#jobs").append(row);
+      body.append(title, message, progress, files); row.append(icon, body, cancel); rows.set(job.id, row); container.append(row);
     }
     const files = row.querySelector(".job-files");
-    const signature = job.state === "complete" ? JSON.stringify(job.files || []) : "";
+    const signature = JSON.stringify(job.files || []);
     if (files.dataset.signature !== signature) {
       files.dataset.signature = signature; files.replaceChildren();
-      if (job.state === "complete") for (const file of job.files || []) {
+      for (const file of job.files || []) {
         const analyze = document.createElement("button"); analyze.className = "secondary";
         analyze.textContent = job.files.length > 1 ? `BPM and key detection: ${file.name}` : "BPM and key detection";
         analyze.addEventListener("click", () => selectAnalysisFile(file, true)); files.append(analyze);
@@ -160,7 +172,7 @@ async function refresh() {
     renderDiagnostics(data); renderJobs(jobs);
     if (typeof refreshAnalysis === "function") await refreshAnalysis();
     if (!releases || releases.checking) renderReleases(await api("/api/app-update"));
-  } catch { feedback("#download-message", "Connection to the app was interrupted. Reconnecting…", true); }
+  } catch { for (const view of downloaders) downloadFeedback(view, "Connection to the app was interrupted. Reconnecting…", true); }
   finally { polling = false; }
 }
 async function prepareTools(updateOnly) {
@@ -177,14 +189,25 @@ async function confirmPlaylist() {
     $("#playlist-yes").onclick = () => done(true); $("#playlist-no").onclick = () => done(false); dialog.oncancel = event => { event.preventDefault(); done(false); };
   });
 }
-$("#download-form").addEventListener("submit", async event => {
-  event.preventDefault(); if (submitting) return; submitting = true; $("#download-button").disabled = true;
+for (const view of downloaders) downloadNode(view, "download-form").addEventListener("submit", async event => {
+  event.preventDefault(); if (submitting) return; submitting = true;
+  for (const item of downloaders) downloadNode(item, "download-button").disabled = true;
   try {
-    const body = {url: $("#url").value.trim(), format: $("#format").value, confirm_playlist: false};
-    if (new URL(body.url).searchParams.has("list")) { if (!(await confirmPlaylist())) return; body.confirm_playlist = true; }
-    await api("/api/download", "POST", body); $("#url").value = ""; feedback("#download-message", "Added to your download queue."); await refresh();
-  } catch (error) { feedback("#download-message", error.message, true); }
-  finally { submitting = false; $("#download-button").disabled = !diagnostics?.ready || diagnostics?.setup.running; }
+    const body = {url: downloadNode(view, "url").value.trim(), source: view.source, format: downloadNode(view, "format").value, confirm_playlist: false};
+    let playlist = new URL(body.url).searchParams.has("list");
+    if (view.source === "soundcloud") {
+      downloadFeedback(view, "Checking SoundCloud link…");
+      const link = await api("/api/resolve-link", "POST", {url: body.url, source: view.source});
+      body.url = link.url; playlist = link.playlist;
+    }
+    if (playlist) { if (!(await confirmPlaylist())) { downloadFeedback(view, ""); return; } body.confirm_playlist = true; }
+    await api("/api/download", "POST", body);
+    downloadNode(view, "url").value = ""; downloadFeedback(view, "Added to your download queue."); await refresh();
+  } catch (error) { downloadFeedback(view, error.message, true); }
+  finally {
+    submitting = false;
+    for (const item of downloaders) downloadNode(item, "download-button").disabled = !diagnostics?.ready || diagnostics?.setup.running;
+  }
 });
 function toggleNotifications(open) {
   $("#notifications").hidden = !open; $("#bell").setAttribute("aria-expanded", String(open));
@@ -233,9 +256,9 @@ $("#copy-diagnostics").addEventListener("click", async () => {
   } catch { feedback("#copy-message", "Clipboard unavailable. Open Technical details and copy the text.", true); }
 });
 async function init() {
-  formatHelp();
+  for (const view of downloaders) formatHelp(view);
   try { applySettings(await api("/api/settings")); }
-  catch (error) { feedback("#download-message", error.message, true); }
+  catch (error) { for (const view of downloaders) downloadFeedback(view, error.message, true); }
   await refresh(); setInterval(refresh, 1000);
 }
 init();

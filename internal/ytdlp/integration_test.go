@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/VaDKustiK/ytaudio/internal/urlcheck"
 )
 
 func TestRunnerHelper(t *testing.T) {
@@ -134,7 +136,7 @@ func TestLocalAudioConversion(t *testing.T) {
 	metadata := filepath.Join(t.TempDir(), "source.json")
 	data, err := json.Marshal(map[string]any{
 		"id": "local-audio", "title": "Local artwork regression", "url": "file://" + input,
-		"ext": "webm", "vcodec": "none", "acodec": "opus", "extractor": "generic",
+		"ext": "webm", "vcodec": "none", "acodec": "opus", "extractor": "generic", "format_id": "http_opus",
 		"thumbnail": artworkServer.URL + "/cover.jpg",
 	})
 	if err != nil {
@@ -143,76 +145,83 @@ func TestLocalAudioConversion(t *testing.T) {
 	if err := os.WriteFile(metadata, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	for _, format := range []Format{MP3, WAV, FLAC, OGG, M4A} {
-		t.Run(string(format), func(t *testing.T) {
-			folder := t.TempDir()
-			thumbnailRequests.Store(0)
-			args, err := BuildArgs("https://youtu.be/abc", folder, format)
-			if err != nil {
-				t.Fatal(err)
-			}
-			filtered := []string{"--enable-file-urls", "--no-cache-dir", "--load-info-json", metadata}
-			for i := 0; i < len(args); i++ {
-				if args[i] == "--sleep-requests" || args[i] == "--sleep-interval" || args[i] == "--max-sleep-interval" {
-					i++
-					continue
+	for _, source := range []urlcheck.Source{urlcheck.YouTube, urlcheck.SoundCloud} {
+		for _, format := range []Format{MP3, WAV, FLAC, OGG, M4A} {
+			t.Run(string(source)+"/"+string(format), func(t *testing.T) {
+				folder := t.TempDir()
+				thumbnailRequests.Store(0)
+				rawURL := "https://youtu.be/abc"
+				if source == urlcheck.SoundCloud {
+					rawURL = "https://soundcloud.com/artist/song"
 				}
-				filtered = append(filtered, args[i])
-			}
-			filtered = filtered[:len(filtered)-2]
-			var final string
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			err = (Runner{Executable: yt, Env: append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"))}).Run(ctx, filtered, func(p Progress) {
-				if p.File != "" {
-					final = p.File
-				}
-			}, io.Discard)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if final == "" {
-				t.Fatal("no final file event")
-			}
-			out, err := exec.Command(probe, "-v", "error", "-show_entries", "stream=codec_name,codec_type", "-of", "json", final).Output()
-			if err != nil {
-				t.Fatal(err)
-			}
-			var info struct {
-				Streams []struct {
-					Codec string `json:"codec_name"`
-					Type  string `json:"codec_type"`
-				} `json:"streams"`
-			}
-			if err = json.Unmarshal(out, &info); err != nil {
-				t.Fatal(err)
-			}
-			expected := map[Format]string{MP3: "mp3", WAV: "pcm_s16le", FLAC: "flac", OGG: "vorbis", M4A: "aac"}[format]
-			if len(info.Streams) != 1 || info.Streams[0].Type != "audio" || info.Streams[0].Codec != expected {
-				t.Fatalf("expected only the requested audio stream, without embedded artwork: %s", out)
-			}
-			if thumbnailRequests.Load() != 0 {
-				t.Fatal("audio downloads must never fetch artwork")
-			}
-			var files []string
-			err = filepath.WalkDir(folder, func(path string, entry os.DirEntry, err error) error {
+				args, err := BuildArgsForSource(rawURL, folder, format, false, source)
 				if err != nil {
-					return err
+					t.Fatal(err)
 				}
-				if !entry.IsDir() {
-					files = append(files, path)
+				filtered := []string{"--enable-file-urls", "--no-cache-dir", "--load-info-json", metadata}
+				for i := 0; i < len(args); i++ {
+					if args[i] == "--sleep-requests" || args[i] == "--sleep-interval" || args[i] == "--max-sleep-interval" {
+						i++
+						continue
+					}
+					filtered = append(filtered, args[i])
 				}
-				return nil
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(files) != 1 || files[0] != final {
-				t.Fatalf("destination must contain only the audio file: %v", files)
-			}
+				filtered = filtered[:len(filtered)-2]
+				var final string
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				err = (Runner{Executable: yt, Env: append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"))}).Run(ctx, filtered, func(p Progress) {
+					if p.File != "" {
+						final = p.File
+					}
+				}, io.Discard)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if final == "" {
+					t.Fatal("no final file event")
+				}
+				out, err := exec.Command(probe, "-v", "error", "-show_entries", "stream=codec_name,codec_type", "-of", "json", final).Output()
+				if err != nil {
+					t.Fatal(err)
+				}
+				var info struct {
+					Streams []struct {
+						Codec string `json:"codec_name"`
+						Type  string `json:"codec_type"`
+					} `json:"streams"`
+				}
+				if err = json.Unmarshal(out, &info); err != nil {
+					t.Fatal(err)
+				}
+				expected := map[Format]string{MP3: "mp3", WAV: "pcm_s16le", FLAC: "flac", OGG: "vorbis", M4A: "aac"}[format]
+				if len(info.Streams) != 1 || info.Streams[0].Type != "audio" || info.Streams[0].Codec != expected {
+					t.Fatalf("expected only the requested audio stream, without embedded artwork: %s", out)
+				}
+				if thumbnailRequests.Load() != 0 {
+					t.Fatal("audio downloads must never fetch artwork")
+				}
+				var files []string
+				err = filepath.WalkDir(folder, func(path string, entry os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if !entry.IsDir() {
+						files = append(files, path)
+					}
+					return nil
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(files) != 1 || files[0] != final {
+					t.Fatalf("destination must contain only the audio file: %v", files)
+				}
 
-		})
+			})
+		}
 	}
+
 }
 
 func TestOversizedStdoutTerminatesProcess(t *testing.T) {

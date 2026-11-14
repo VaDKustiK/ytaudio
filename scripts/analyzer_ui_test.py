@@ -70,6 +70,11 @@ def test(binary,component):
                 page.locator('[data-page=downloader]').click();page.get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000)
                 expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name)
                 expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
+                # SoundCloud uses the same registered-file handoff and auto-analysis.
+                page.route('**/api/jobs',lambda route:route.fulfill(status=200,content_type='application/json',body=json.dumps([{'id':'sc-saved','source':'soundcloud','format':'flac','url':'https://soundcloud.com/artist/track','state':'complete','message':'Audio saved','progress':{'file':audio.name,'percent':100,'stage':'saved'},'files':[registered]}])))
+                page.locator('[data-page=soundcloud]').click();page.locator('#sc-jobs').get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000)
+                expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name)
+                expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
                 # First-time setup preserves the same automatic handoff too.
                 setup_pending=[True]
                 def analyzer_state(route):
@@ -80,7 +85,7 @@ def test(binary,component):
                     route.fulfill(status=200,content_type='application/json',body=json.dumps({'ready':True,'status':'idle','installing':False}))
                 page.route('**/api/analysis',analyzer_state);page.route('**/api/analysis/install',install_component)
                 expect(page.locator('#install-analyzer')).to_be_visible()
-                page.locator('[data-page=downloader]').click();page.get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000);expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name);page.locator('#install-analyzer').click();expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
+                page.locator('[data-page=soundcloud]').click();page.locator('#sc-jobs').get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000);expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name);page.locator('#install-analyzer').click();expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
                 page.locator('[data-page=settings]').click();page.locator('#analyzer-performance').select_option('low');page.locator('#save-settings').click();expect(page.locator('#settings-message')).to_have_text('Preferences saved.')
                 assert json.loads((cfg/'config.json').read_text())['analyzer_performance']=='low'
                 # Browser mode supports the actual file-input/drag-upload route too.
@@ -89,7 +94,6 @@ def test(binary,component):
                 encoded=base64.b64encode(audio.read_bytes()).decode()
                 browser_page.evaluate("""data=>{const bytes=Uint8Array.from(atob(data.audio),c=>c.charCodeAt(0));const transfer=new DataTransfer();transfer.items.add(new File([bytes],data.name,{type:'audio/wav'}));document.querySelector('#audio-drop').dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));}""",{'audio':encoded,'name':'Dropped audio.wav'})
                 expect(browser_page.locator('#audio-name')).to_have_text('Dropped audio.wav');browser_page.locator('#analyze-audio').click();expect(browser_page.locator('#analysis-results')).to_be_visible(timeout=30000)
-                page.locator('[data-page=analyzer]').click();page.screenshot(path='/tmp/ytaudio-analyzer.png',full_page=True)
                 assert not errors,errors
                 browser.close()
             print('Analyzer UI: picker, native drop callback, real analysis, copy, download handoff, settings, browser upload passed')

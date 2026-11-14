@@ -3,11 +3,11 @@
 Runs the actual local server with isolated config/cache. Download/network fixtures
 are mocked: this script never downloads media or opens an external release URL.
 """
-import argparse, contextlib, datetime, json, os, pathlib, socket, subprocess, tempfile, time, urllib.request
+import argparse, datetime, json, os, pathlib, socket, subprocess, tempfile, time, urllib.request
 from playwright.sync_api import sync_playwright, expect
 
 
-def test(binary, screenshots):
+def test(binary):
     with tempfile.TemporaryDirectory(prefix="ytaudio-ui-") as root:
         root = pathlib.Path(root); output = root / "music"; output.mkdir()
         with socket.socket() as sock:
@@ -45,7 +45,7 @@ def test(binary, screenshots):
                 page.route("**/api/jobs",lambda r:fulfill(r,jobs))
                 def download(route):
                     body=route.request.post_data_json;submissions.append(body);identifier=str(len(submissions))
-                    jobs.append({"id":identifier,"url":body["url"],"format":body["format"],"state":"running","message":"Downloading audio","progress":{"stage":"downloading","percent":42.5,"speed":"1.2MiB/s","eta":"00:10"}})
+                    jobs.append({"id":identifier,"url":body["url"],"format":body["format"],"source":body.get("source","youtube"),"state":"running","message":"Downloading audio","progress":{"stage":"downloading","percent":42.5,"speed":"1.2MiB/s","eta":"00:10"}})
                     fulfill(route,{"id":identifier})
                 page.route("**/api/download",download)
                 def cancel(route):
@@ -112,24 +112,70 @@ def test(binary, screenshots):
                 jobs[0].update(state="complete",message="Audio saved",progress={"stage":"saved","percent":100,"file":"Music <script>.flac"})
                 expect(page.locator(".job-title")).to_have_text("Music <script>.flac")
                 assert page.locator("#jobs script").count()==0
-                screenshots.mkdir(parents=True,exist_ok=True)
-                page.screenshot(path=str(screenshots / "downloader-dark-on-light-system.png"),full_page=True)
-                page.emulate_media(color_scheme="dark");page.screenshot(path=str(screenshots / "downloader-dark.png"),full_page=True)
+                # The second downloader shares settings/tools, but owns its form and results.
+                page.locator('[data-page="soundcloud"]').click()
+                expect(page.locator("#page-soundcloud")).to_be_visible()
+                expect(page.locator("#sc-format")).to_have_value("flac")
+                assert page.locator("#sc-format option").all_text_contents()==["MP3","WAV","FLAC","OGG"]
+                expect(page.locator("#sc-jobs .job")).to_have_count(0)
+                page.evaluate("navigator.clipboard.writeText('https://soundcloud.com/artist/song?si=tracking')")
+                page.locator("#sc-paste-url").click()
+                expect(page.locator("#sc-url")).to_have_value("https://soundcloud.com/artist/song?si=tracking")
+                # Link validation uses the real backend, before any mocked download.
+                previous=len(submissions)
+                page.locator("#sc-url").fill("https://youtu.be/wrong-tab");page.locator("#sc-download-button").click()
+                expect(page.locator("#sc-download-message")).to_contain_text("only SoundCloud")
+                assert len(submissions)==previous
+                page.locator("#sc-url").fill("https://soundcloud.com/artist");page.locator("#sc-download-button").click()
+                expect(page.locator("#sc-download-message")).to_contain_text("profile or page")
+                page.locator("#sc-url").fill("https://soundcloud.com/artist/song?si=tracking");page.locator("#sc-download-button").click()
+                expect(page.locator("#sc-jobs .job")).to_have_count(1)
+                assert submissions[-1]=={"source":"soundcloud","url":"https://soundcloud.com/artist/song","format":"flac","confirm_playlist":False}
+                expect(page.locator("#jobs .job")).to_have_count(1)
+                expect(page.locator("#sc-queue-count")).to_have_text("1")
+                page.locator("#sc-jobs .job button").click();expect(page.locator("#sc-jobs .job")).to_have_class("job cancelled")
+                page.locator("#sc-jobs .job button").click();expect(page.locator("#sc-jobs .job")).to_have_count(0)
+                # A shared playlist must be confirmed after its redirect is expanded.
+                def share_link(route):
+                    if "on.soundcloud.com" in route.request.post_data_json["url"]:
+                        fulfill(route,{"url":"https://soundcloud.com/artist/sets/album","source":"soundcloud","playlist":True})
+                    else:route.continue_()
+                page.route("**/api/resolve-link",share_link)
+                previous=len(submissions)
+                page.locator("#sc-url").fill("https://on.soundcloud.com/Share");page.locator("#sc-download-button").click()
+                expect(page.locator("#playlist-dialog")).to_be_visible();page.locator("#playlist-no").click()
+                assert len(submissions)==previous
+                page.locator("#sc-download-button").click();page.locator("#playlist-yes").click()
+                expect(page.locator("#sc-jobs .job")).to_have_count(1)
+                assert submissions[-1]["confirm_playlist"] and submissions[-1]["url"].endswith("/sets/album")
+                jobs[-1].update(state="failed",message="SoundCloud did not provide a full track without signing in. It may require an account or SoundCloud Go+ subscription, or offer only a preview. ytaudio downloads without an account and does not save previews.",files=[{"id":"saved-file","name":"Saved track.flac"}])
+                expect(page.locator("#sc-jobs .job-message")).to_contain_text("without signing in")
+                expect(page.locator("#sc-jobs .job-files button")).to_have_text("BPM and key detection")
+                # Audio already saved from a partial playlist remains accessible.
+                assert page.locator('#page-soundcloud input[type=password]').count()==0
+                opened=[]
+                page.route("**/api/open-folder",lambda route:(opened.append(True),route.fulfill(status=204)))
+                page.locator("#sc-open-folder").click();expect(page.locator("#sc-open-folder")).to_be_enabled()
+                page.wait_for_timeout(100);assert opened
+                page.locator('[data-page="downloader"]').click()
                 page.locator('[data-page="settings"]').click()
-                page.screenshot(path=str(screenshots / "settings-dark.png"),full_page=True)
                 page.locator('[data-page="info"]').click();expect(page.locator("#app-version")).to_have_text("v0.1.0")
                 expect(page.locator("#info-heading")).to_have_text("Info")
-                page.screenshot(path=str(screenshots / "info-dark.png"),full_page=True)
                 page.set_viewport_size({"width":390,"height":844});page.locator('[data-page="downloader"]').click()
                 assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-                page.screenshot(path=str(screenshots / "mobile-dark.png"),full_page=True)
                 for width in (390,640,760,1100):
                     page.set_viewport_size({"width":width,"height":800})
-                    for section in ("settings","info","downloader","analyzer"):
+                    download_layouts=[]
+                    for section in ("settings","info","downloader","soundcloud","analyzer"):
                         page.locator(f'[data-page="{section}"]').click()
                         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"),(width,section)
                         bell=page.locator("#bell").bounding_box()
                         assert bell["x"]>=0 and bell["x"]+bell["width"]<=width
+                        if section in ("downloader","soundcloud"):
+                            form=page.locator(f'#page-{section} .download-panel').bounding_box()
+                            assert form["y"]>=bell["y"]+bell["height"]+8,(width,section,"bell overlaps download form")
+                            download_layouts.append([form[key] for key in ("x","y","width","height")])
+                    assert download_layouts[0]==download_layouts[1],(width,"download layouts differ",download_layouts)
                 # Unversioned local builds must not appear to be published releases.
                 page.route("**/api/diagnostics",lambda r:fulfill(r,{"version":"dev","os":"linux","arch":"amd64","ready":True,"setup":{"running":False,"message":"Download tools are ready","percent":100},"dependencies":[],"last_log":""}))
                 page.route("**/api/app-update",lambda r:fulfill(r,{"current":"dev","ready":False,"checking":False,"notifications":[]}))
@@ -143,11 +189,11 @@ def test(binary, screenshots):
                 expect(page.locator("#notification-list")).to_contain_text("Development build")
                 assert not errors,errors
                 browser.close()
-                print("PASS: navigation, saved settings, formats, progress, cancel/dismiss, playlists, release bell, safe text, dark mode, clipboard success/empty/denied/native bridge, responsive layouts; no JavaScript errors")
+                print("PASS: navigation, saved settings, formats, progress, cancel/dismiss, YouTube + SoundCloud tab isolation, link validation, share/playlist confirmation, guest restriction messages, release bell, safe text, dark mode, clipboard success/empty/denied/native bridge, responsive layouts; no JavaScript errors")
         finally:
             process.terminate()
             try:process.wait(timeout=10)
             except subprocess.TimeoutExpired:process.kill();process.wait()
 
 if __name__=="__main__":
-    parser=argparse.ArgumentParser();parser.add_argument("--binary",type=pathlib.Path,required=True);parser.add_argument("--screenshots",type=pathlib.Path,default=pathlib.Path("/tmp/ytaudio-screenshots"));args=parser.parse_args();test(args.binary.resolve(),args.screenshots)
+    parser=argparse.ArgumentParser();parser.add_argument("--binary",type=pathlib.Path,required=True);args=parser.parse_args();test(args.binary.resolve())

@@ -42,6 +42,7 @@ type SetupState struct {
 	Error   string  `json:"error,omitempty"`
 }
 type Job struct {
+	Source   urlcheck.Source `json:"source"`
 	Files    []analyzer.File `json:"files,omitempty"`
 	ID       string          `json:"id"`
 	URL      string          `json:"url"`
@@ -194,6 +195,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/setup", func(w http.ResponseWriter, r *http.Request) { s.setupTools(w, r, false) })
 	mux.HandleFunc("/api/check-updates", func(w http.ResponseWriter, r *http.Request) { s.setupTools(w, r, true) })
 	mux.HandleFunc("/api/download", s.startDownload)
+	mux.HandleFunc("/api/resolve-link", s.resolveLink)
 	mux.HandleFunc("/api/jobs", s.listJobs)
 	mux.HandleFunc("/api/jobs/", s.jobHandler)
 	mux.HandleFunc("/api/app-update", s.updates)
@@ -488,22 +490,22 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		URL             string       `json:"url"`
-		Format          ytdlp.Format `json:"format"`
-		ConfirmPlaylist bool         `json:"confirm_playlist"`
+		Source          urlcheck.Source `json:"source"`
+		URL             string          `json:"url"`
+		Format          ytdlp.Format    `json:"format"`
+		ConfirmPlaylist bool            `json:"confirm_playlist"`
 	}
 	if !decode(w, r, &request) {
 		return
 	}
-	normalized, err := urlcheck.Normalize(request.URL)
+	link, err := s.downloadLink(r.Context(), request.URL, request.Source)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	u, _ := url.Parse(normalized)
-	playlist := u.Query().Get("list") != ""
+	normalized, playlist := link.URL, link.Playlist
 	if playlist && !request.ConfirmPlaylist {
-		http.Error(w, "Download this playlist? Up to 100 videos will be processed, one at a time.", http.StatusConflict)
+		http.Error(w, "Download this playlist? Up to 100 tracks will be processed, one at a time.", http.StatusConflict)
 		return
 	}
 	s.mu.Lock()
@@ -517,7 +519,7 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error()+". Choose a folder in Settings.", http.StatusBadRequest)
 		return
 	}
-	args, err := ytdlp.BuildArgsWithPlaylist(normalized, cfg.OutputFolder, request.Format, playlist)
+	args, err := ytdlp.BuildArgsForSource(normalized, cfg.OutputFolder, request.Format, playlist, link.Source)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -543,7 +545,7 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := newToken()[:16]
-	job := &Job{ID: id, URL: normalized, Format: request.Format, State: "queued", Message: "Waiting in queue", Created: time.Now()}
+	job := &Job{ID: id, Source: link.Source, URL: normalized, Format: request.Format, State: "queued", Message: "Waiting in queue", Created: time.Now()}
 	s.jobs[id] = job
 	queued, err := s.queue.Submit(id, func(ctx context.Context) error { return s.run(ctx, job, manager, executable, args) })
 	if err != nil {
@@ -568,12 +570,14 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 func (s *Server) run(ctx context.Context, job *Job, manager *deps.Manager, executable string, args []string) error {
 	s.mu.Lock()
 	job.State = "running"
-	job.Message = "Getting video information…"
+	job.Message = "Getting track information…"
 	s.mu.Unlock()
+	saved := false
 	report := func(p ytdlp.Progress) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if p.Stage == "saved" && p.File != "" {
+			saved = true
 			if analysis, e := s.analyzerLocked(); e == nil {
 				if file, e := analysis.Register(p.File, false); e == nil {
 					found := false
@@ -605,7 +609,7 @@ func (s *Server) run(ctx context.Context, job *Job, manager *deps.Manager, execu
 	}
 	runner := ytdlp.Runner{Executable: executable, Env: manager.Environment()}
 	err := runner.Run(ctx, args, report, io.Discard)
-	if err != nil && ctx.Err() == nil && ytdlp.Classify(err.Error()).Retry {
+	if err != nil && ctx.Err() == nil && ytdlp.ClassifyForSource(err.Error(), job.Source).Retry {
 		s.mu.Lock()
 		job.Message = "Updating yt-dlp, then retrying once…"
 		s.mu.Unlock()
@@ -625,9 +629,15 @@ func (s *Server) run(ctx context.Context, job *Job, manager *deps.Manager, execu
 		job.Message = "Cancelled"
 		return ctx.Err()
 	}
+	if err == nil && !saved && job.Source == urlcheck.SoundCloud {
+		err = fmt.Errorf("SoundCloud returned no playable tracks. The playlist may be empty or its tracks unavailable")
+	}
 	if err != nil {
 		job.State = "failed"
-		job.Message = ytdlp.Classify(err.Error()).Message
+		job.Message = ytdlp.ClassifyForSource(err.Error(), job.Source).Message
+		if saved {
+			job.Message += " Some tracks were saved before the error."
+		}
 		s.lastLog = err.Error()
 	} else {
 		job.State = "complete"

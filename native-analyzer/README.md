@@ -1,27 +1,9 @@
 # Offline analyzer
 
-Development is on `dev`. This component is separate from the Wails process;
+This component is separate from the Wails process;
 FFmpeg decodes user audio and a CPU-only C++ process returns versioned JSON.
 No Python is needed by the installed application. Python is development tooling
 for model export and numerical comparison only.
-
-## Milestone gates
-
-Each gate must pass before the following milestone is accepted. Building an
-executable is not an accuracy benchmark or evidence of native platform support.
-
-1. Architecture/provenance: inspect upstream source and licenses, pin artifacts,
-   define CLI/schema, retain Windows amd64/arm64, macOS arm64, Linux amd64/arm64.
-2. Rhythm: native mel, ONNX inference and postprocessing compared with the
-   official final0 reference, including chunk boundaries; robust tempo tests.
-3. Harmony: reference/native CQT and model parity, controlled tuning/key tests,
-   explicit unknown/mixed results, no fabricated measurements.
-4. Integration: local picker/drop and completed-download detection, one cancellable
-   analysis, bounded cache, persistent performance settings, regression tests.
-5. Distribution: verified separate packages, atomic installation, offline tests,
-   packaged runtime smoke tests on each supported target.
-6. Evaluation: resource measurements and independently labelled representative
-   beats. Synthetic fixtures alone do not establish real-world accuracy.
 
 Exact artifact URLs/sizes/digests are in [sources.lock.json](sources.lock.json);
 packaged model digests are in [models.lock.json](models.lock.json).
@@ -112,7 +94,7 @@ Noise and insufficient pitched evidence yield an unavailable key. Mixed tuning
 and near-half-semitone boundaries mark an otherwise supported key uncertain.
 Internal evidence scores are not calibrated correctness probabilities.
 
-## Reproduce the local gates
+## Build and test
 
 Use the CPU Python 3.13 environment described in the root README, a C++20
 compiler and CMake 3.20+. The pinned Python lock is tested on Linux. The reviewed
@@ -160,32 +142,14 @@ separately prepared ignored media-test tools, as described in the root README.
 Raw reports, downloaded sources/models, environments and build products stay
 outside Git. Benchmarks identify their exact executable with SHA-256.
 
-## Validation record — 13.11.2026
+## Validation and limitations
 
-| Gate | Observed status |
-| --- | --- |
-| 1: architecture, provenance, artifact pins | Complete; exact revisions/hashes in lock files. |
-| 2: rhythm implementation/reference parity | Passed local unit, model, FFT and chunk-boundary gates. Genre accuracy remains unverified. |
-| 3: harmony implementation/reference parity | Passed local CQT/model, class mapping, tuning, mixed/unknown and boundary tests. |
-| 4: integration and regressions | Passed local Go race tests, actual FFmpeg/native analysis and browser UI flows. Native Linux WebView analysis/copy/drop-event smoke test passed; physical dialog/drop still needs manual testing. |
-| 5: distribution/offline operation | Linux amd64 installation, repair, rollback and model reuse passed locally. Native package/input checks passed dev CI on Linux amd64/arm64 and macOS arm64. Windows requires a rerun with the MSVC fix. |
-| 6: resource/accuracy review | Generated-fixture evaluation and resource measurements complete. Independently labelled real-world beats and full native platform validation remain outstanding. |
-
-The commands above passed locally, including source-format tests for WAV, MP3,
-FLAC, M4A, OGG and Opus at 44.1/48 kHz, Unicode paths, cache hits/invalidation,
-request replacement, cancellation/manager shutdown during inference, temporary-file
-cleanup, navigation during analysis, persistent file errors and stale-result
-prevention when reselecting the same path.
-Safety tests reject truncated, nonfinite, oversized and too-short PCM; silence,
-noise-only input, anti-phase stereo, extreme clipping, sliding/distorted bass
-and mixed tuning are handled explicitly.
-Installer tests use real release archives with a simulated GitHub transport;
-they do not publish a release or prove live GitHub asset availability. Browser
-UI tests use real FFmpeg/native processing with simulated native picker/drop
-callbacks and optional-component availability. A real Linux WebView smoke test
-also passed for native picker callbacks, analysis, clipboard and Go-to-JS drop
-events. Physical OS drag/drop and the actual native dialog remain manual checks.
-Existing downloader UI and conversion regressions pass.
+Native/reference tests compare preprocessing, inference and postprocessing.
+Input tests cover invalid and too-short PCM, silence, noise, anti-phase stereo,
+clipping, sliding bass and mixed tuning. Integration tests cover source formats,
+cache invalidation, cancellation, navigation and completed-download handoff.
+Browser tests use simulated native picker/drop callbacks; actual dialogs and
+physical drag and drop still require testing in the native application.
 
 Reference comparisons:
 
@@ -226,44 +190,16 @@ all natural major/minor keys, 84/140 BPM, 440/432 Hz):
 | Maximum tuning error | 0.442 cents / 0.111 Hz |
 
 These are controlled generated fixtures, **not real-world or held-out accuracy**.
-No representative producer-labelled trap/drill/hip-hop/R&B set was available,
-and no audio was sent to Tunebat or Antares. The requested accuracy targets have
-not been demonstrated. Neural key results, particularly relative major/minor,
-still need musical verification; do not advertise commercial-detector parity.
-
-### Local producer reference
-
-A supplied 133.19-second stereo OGG (48 kHz), labelled by its producer as
-130 BPM / F# major, reproduced two false warnings. Taking a median before
-folding missed beats invented a 1.5x interval in two sections. Weak pitch
-shoulders also triggered the previous competing-tuning rule. After fixing those
-general rules, the full file reports 130.013 BPM, F# major without an uncertainty
-flag, and standard tuning (440 Hz within the ±2.5-cent tolerance). The producer
-did not supply an independent tuning measurement. The 24 generated-fixture
-metrics above are unchanged; true tempo changes, genuinely competing tunings,
-noise and sliding-bass checks still pass.
-
-This is one development reference, not held-out evidence of general accuracy.
-Its audio is neither required by CI nor included in app/model packages. Root
-OGG files are ignored by Git and the supplied file can be deleted. To check
-another local reference with Python's standard library and installed FFmpeg:
-
-```sh
-python native-analyzer/tools/check_reference_audio.py \
-  --audio /path/to/reference.ogg \
-  --binary build/analyzer/install/ytaudio-analyzer \
-  --models build/analyzer/install/models \
-  --expect-bpm 130 --expect-tonic 'F#' --expect-scale major \
-  --expect-steady --expect-clear-key --report build/analyzer/reference-result.json
-```
-
-Only pass the steady/clear-key expectations when appropriate to the reference.
-The report records audio/executable hashes and results; the original is unchanged.
+Neural key results, particularly relative major/minor, still need musical
+verification. Representative independently labelled audio is needed to measure
+accuracy for a specific genre or compare with commercial detectors. Local audio
+can be checked with `tools/check_reference_audio.py`; it does not store or
+distribute the source recording.
 
 ## Resource and package measurements
 
-The resource measurements below predate the local-reference warning fixes;
-their exact executable hash is retained in `build/analyzer/benchmark.json`.
+These single-run development measurements are illustrative. Use
+`tools/benchmark.py` to measure the current build on your hardware.
 
 A generated three-minute C-major progression with bass/percussion, 140 BPM and
 432 Hz was analyzed on Linux amd64, Intel i5-13500H, 16 logical CPUs, GCC 14.2.
@@ -335,14 +271,6 @@ replacement leaves the active installation available. Analysis never downloads
 models or audio; first setup requires connectivity. The main installer and
 ordinary downloader dependency repair remain separate.
 
-| Target | Go build checked locally | Packaged native analyzer execution |
-| --- | --- | --- |
-| Linux amd64 | Desktop, native WebView smoke | Passed locally and in dev CI |
-| Windows amd64 | Desktop cross-build | MSVC header fix awaiting native CI rerun |
-| Windows arm64 | Desktop cross-build | MSVC header fix awaiting native CI rerun |
-| macOS arm64, analyzer requires 13.4+ | Browser/core cross-build only | Packaged CLI/input checks passed dev CI; manual UI testing pending |
-| Linux arm64 | Browser/core cross-build only | Packaged CLI/input checks passed dev CI; manual UI testing pending |
-
 SDK archives for all five targets are hash-pinned. The native CI matrix builds
 and executes unit/input/package smoke tests on actual target runners. Workflow
 definitions are checked with actionlint. Production POSIX executables are stripped
@@ -353,33 +281,6 @@ executable-relative ORT path and the existing glibc release baselines. Inspectio
 of the pinned Apple Silicon SDK confirms minimum macOS 13.4 and
 `@rpath/libonnxruntime.1.23.2.dylib`; its package ships that library once.
 
-The first dev CI run exposed host-dependent KeyNet export bytes: numerical
-parity passed, but the regenerated file did not match the local pinned hash.
-Packaging now retains the canonical artifact and validates fresh exports
-separately. Regression tests accept equivalent byte-different candidates and
-reject changed inference, tampered canonical models and tampered beat models.
-The canonical model and its Go/JSON digest pins remain unchanged.
-
-Secret scanning uses the full default Gitleaks rules. `.gitleaks.toml` adds one
-exception for the exact public KeyNet checksum in the two model-digest source
-paths. The security job tests that other values in those files and that same
-checksum outside those paths are still detected. Local history and current-source
-scans pass, and the dev CI security check now passes too.
-The security gate also identified GO-2026-6859 in Go 1.27.3; the module now
-selects the fixed Go 1.27.4 toolchain for local builds and CI.
-
-The following dev run passed model packaging, security, macOS ARM64 and both
-Linux native jobs, but exposed an MSVC header conflict in the Windows builds.
-Windows targets now define `NOMINMAX`; MSVC targets also use `/Zc:__cplusplus`
-so r8brain selects its modern C++ implementation. The native platform regression
-test includes the Windows SDK before r8brain/PocketFFT, checks the standard
-version and absence of min/max macros, and exercises the resampler. Both Windows
-architectures still need a fresh successful native CI run with these flags.
-
-Before merging into `main`: run the dev CI matrix, test real native picker/drop,
-installation/repair and offline analysis on Windows/Linux/macOS, check signed or
-unsigned macOS Gatekeeper behavior, and evaluate independently labelled beats
-covering the intended genres, sliding/distorted bass, changing keys/tempo and
-mixed tunings. Real GitHub first-install behavior also needs a release containing
-the new assets. This feature is ready for local development testing; these
-remaining gates prevent a full production-readiness claim.
+Before a release, run the native CI matrix and test installation, repair,
+offline analysis, native file selection and drag and drop on the supported
+operating systems. macOS signing/notarization behavior needs a native check.
