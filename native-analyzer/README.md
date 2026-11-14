@@ -96,8 +96,16 @@ Internal evidence scores are not calibrated correctness probabilities.
 
 ## Build and test
 
-Use the CPU Python 3.13 environment described in the root README, a C++20
-compiler and CMake 3.20+. The pinned Python lock is tested on Linux. The reviewed
+Use CPU-only Python 3.13, a C++20 compiler and CMake 3.20+.
+Create the export/test environment from the repository root:
+
+```sh
+uv venv --python 3.13 .venv-analyzer
+uv pip install --python .venv-analyzer/bin/python torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv-analyzer/bin/python --index-strategy unsafe-best-match -r native-analyzer/tools/requirements.lock.txt
+```
+
+The pinned Python lock is tested on Linux. The reviewed
 canonical KeyNet ONNX is stored in `models/` with its upstream MIT license;
 every build checks its existing pinned SHA-256. Fresh exports go to
 `build/analyzer/export-check/` and are checked against PyTorch and the canonical
@@ -131,14 +139,19 @@ actionlint
 go build -o /tmp/ytaudio-browser ./cmd/ytaudio
 python scripts/ui_test.py --binary /tmp/ytaudio-browser
 python scripts/analyzer_ui_test.py --binary /tmp/ytaudio-browser --component build/analyzer/install
-YTAUDIO_MEDIA_TESTS=1 go test ./internal/ytdlp -run TestLocalAudioConversion -v
+YTAUDIO_MEDIA_TESTS=1 go test ./internal/ytdlp -run 'TestLocalAudioConversion|TestSoundCloudRejectsPreviewFormats' -v
 
 python native-analyzer/tools/benchmark.py --binary build/analyzer/install/ytaudio-analyzer --models build/analyzer/install/models --app-binary /tmp/ytaudio-browser --report build/analyzer/benchmark.json
 python native-analyzer/tools/evaluate_fixtures.py --binary build/analyzer/install/ytaudio-analyzer --models build/analyzer/install/models --report build/analyzer/fixtures.json
 ```
 
 Playwright requires its Chromium installation. Local conversion regressions use
-separately prepared ignored media-test tools, as described in the root README.
+separately prepared ignored media-test tools:
+
+```sh
+python3 scripts/prepare_assets.py --os linux --arch amd64 --output internal/deps/assets/linux-amd64
+```
+
 Raw reports, downloaded sources/models, environments and build products stay
 outside Git. Benchmarks identify their exact executable with SHA-256.
 

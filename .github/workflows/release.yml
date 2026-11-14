@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Optional version, e.g. v0.2.0 (blank uses v0.2.<run number>)'
+        description: 'Optional version, e.g. v1.1.0 (blank starts at v1.0.0, then increments the latest stable patch)'
         required: false
 permissions:
   contents: read
@@ -19,24 +19,28 @@ jobs:
   verify:
     uses: ./.github/workflows/ci.yml
   analyzer:
-    needs: verify
+    needs: [version, verify]
     uses: ./.github/workflows/analyzer.yml
   version:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - id: version
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test release version selection
+        run: python scripts/test_release_version.py
+      - name: Select release version
+        id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: |
-          version="${INPUT_VERSION:-v0.2.${RUN_NUMBER}}"
-          if [ "$REF_TYPE" = tag ]; then version="$REF_NAME"; fi
-          if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then exit 1; fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        run: python scripts/release_version.py
   build:
     needs: [version, verify]
     runs-on: ${{ matrix.runner }}
