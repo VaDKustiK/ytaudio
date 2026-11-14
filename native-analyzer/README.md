@@ -142,6 +142,12 @@ separately prepared ignored media-test tools, as described in the root README.
 Raw reports, downloaded sources/models, environments and build products stay
 outside Git. Benchmarks identify their exact executable with SHA-256.
 
+Artifact downloads retry temporary HTTP/network failures up to three times.
+The build-time `final0.ckpt` reference checkpoint also has a revision-pinned
+Hugging Face mirror in `sources.lock.json` for outages of the original server.
+Both sources must match the same pinned size and SHA-256. Integrity failures
+stop the build; they never select different model weights or skip validation.
+
 ## Validation and limitations
 
 Native/reference tests compare preprocessing, inference and postprocessing.
