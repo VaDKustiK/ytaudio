@@ -82,7 +82,7 @@ def package(goos, arch, version):
         with tarfile.open(dist / f"{name}.tar.gz", "w:gz") as tar:
             tar.add(stage,arcname=name)
         # nFPM produces both native formats; packages declare the WebView runtime.
-        common={"name":"ytaudio","arch":arch,"platform":"linux","version":version,"maintainer":"ytaudio maintainers","description":"Simple, local YouTube audio downloads","homepage":"https://github.com/VaDKustiK/ytaudio","license":"MIT","contents":[{"src":str(binary),"dst":"/usr/bin/ytaudio"},{"src":str(ROOT / "packaging/ytaudio.desktop"),"dst":"/usr/share/applications/ytaudio.desktop"},{"src":str(icons / "ytaudio.png"),"dst":"/usr/share/icons/hicolor/512x512/apps/ytaudio.png"},{"src":str(stage / "LICENSE"),"dst":"/usr/share/licenses/ytaudio/LICENSE"},{"src":str(notices),"dst":"/usr/share/doc/ytaudio/third-party","type":"tree"}]}
+        common={"name":"ytaudio","arch":arch,"platform":"linux","version":version,"maintainer":"ytaudio maintainers","description":"Local YouTube and SoundCloud audio downloads","homepage":"https://github.com/VaDKustiK/ytaudio","license":"MIT","contents":[{"src":str(binary),"dst":"/usr/bin/ytaudio"},{"src":str(ROOT / "packaging/ytaudio.desktop"),"dst":"/usr/share/applications/ytaudio.desktop"},{"src":str(icons / "ytaudio.png"),"dst":"/usr/share/icons/hicolor/512x512/apps/ytaudio.png"},{"src":str(stage / "LICENSE"),"dst":"/usr/share/licenses/ytaudio/LICENSE"},{"src":str(notices),"dst":"/usr/share/doc/ytaudio/third-party","type":"tree"}]}
         for kind,depends in (("deb",["libgtk-3-0 | libgtk-3-0t64","libwebkit2gtk-4.1-0"]),("rpm",["libgtk-3.so.0()(64bit)","libwebkit2gtk-4.1.so.0()(64bit)"])):
             cfg={**common,"depends":depends};path=dist / f"nfpm-{arch}-{kind}.json";path.write_text(json.dumps(cfg));run(["nfpm","package","--config",path,"--packager",kind,"--target",dist / f"{name}.{kind}"])
         archroot=dist / f"arch-{arch}"
@@ -94,7 +94,7 @@ def package(goos, arch, version):
         (archroot / "usr/share/licenses/ytaudio").mkdir(parents=True, exist_ok=True)
         shutil.copy2(stage / "LICENSE", archroot / "usr/share/licenses/ytaudio/LICENSE")
         shutil.copytree(notices,archroot / "usr/share/doc/ytaudio/third-party",dirs_exist_ok=True)
-        (archroot / ".PKGINFO").write_text(f"pkgname = ytaudio\npkgbase = ytaudio\npkgver = {version}-1\npkgdesc = Simple local YouTube audio downloader\nurl = https://github.com/VaDKustiK/ytaudio\nbuilddate = {int(time.time())}\npackager = ytaudio maintainers\nsize = {binary.stat().st_size}\narch = {'x86_64' if arch=='amd64' else 'aarch64'}\nlicense = MIT\ndepend = gtk3\ndepend = webkit2gtk-4.1\n")
+        (archroot / ".PKGINFO").write_text(f"pkgname = ytaudio\npkgbase = ytaudio\npkgver = {version}-1\npkgdesc = Local YouTube and SoundCloud audio downloader\nurl = https://github.com/VaDKustiK/ytaudio\nbuilddate = {int(time.time())}\npackager = ytaudio maintainers\nsize = {binary.stat().st_size}\narch = {'x86_64' if arch=='amd64' else 'aarch64'}\nlicense = MIT\ndepend = gtk3\ndepend = webkit2gtk-4.1\n")
         run(["tar","--owner=0","--group=0","--numeric-owner","--mode=u+rwX,go+rX,go-w","--zstd","-cf",dist / f"{name}.pkg.tar.zst","-C",archroot,".PKGINFO","usr"])
     print(f"Built {name} in {dist}")
 

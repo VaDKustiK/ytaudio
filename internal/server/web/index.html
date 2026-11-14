@@ -12,7 +12,8 @@
 <aside class="sidebar">
 <a class="brand" href="#downloader" aria-label="ytaudio home"><img class="brand-logo" src="/static/icon.png" alt="" width="34" height="34">ytaudio</a>
 <nav aria-label="Main navigation">
-<button class="nav-item active" data-page="downloader" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>Downloader</button>
+<button class="nav-item active" data-page="downloader" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>YouTube downloader</button>
+<button class="nav-item" data-page="soundcloud"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v5m3-8v8m3-10v10m3-11a5 5 0 0 1 8 5 3 3 0 0 1-1 6h-7Z"/></svg>SoundCloud downloader</button>
 <button class="nav-item" data-page="analyzer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4m4-9v14m4-11v8m4-13v18m4-11v4"/></svg>BPM and key detector</button>
 <button class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>Settings</button>
 <button class="nav-item" data-page="info"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>Info</button>
@@ -24,7 +25,7 @@
 <section id="notifications" class="notifications" aria-label="Release notifications" hidden><div class="notification-heading"><strong>Updates</strong><button id="close-notifications" class="text-button" aria-label="Close updates">Close</button></div><div id="notification-list"><p class="muted">Checking releases…</p></div></section>
 </div>
 <main>
-<section id="page-downloader" class="page" aria-label="Downloader">
+<section id="page-downloader" class="page downloader-page" aria-label="Downloader">
 <div id="setup-banner" class="notice" hidden><span id="setup-banner-text">Download tools need setup.</span><button class="text-button" data-goto="info">Open Info →</button></div>
 <form id="download-form" class="panel download-panel">
 <label for="url">YouTube link</label><div class="url-field"><input id="url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="download-message"><button id="paste-url" class="secondary" type="button">Paste</button></div>
@@ -35,6 +36,18 @@
 </form>
 <div class="queue-heading"><h2>Downloads <span id="queue-count" class="count">0</span></h2><button id="open-folder" class="text-button">Open folder ↗</button></div>
 <div id="jobs" aria-label="Current session downloads"><div class="empty-state"><span class="empty-icon" aria-hidden="true">♫</span><p>Your next listen starts here.</p><span class="small muted">Downloads will appear here while this app is open.</span></div></div>
+</section>
+<section id="page-soundcloud" class="page downloader-page" hidden aria-label="SoundCloud downloader">
+<div id="sc-setup-banner" class="notice" hidden><span id="sc-setup-banner-text">Download tools need setup.</span><button class="text-button" data-goto="info">Open Info →</button></div>
+<form id="sc-download-form" class="panel download-panel">
+<label for="sc-url">SoundCloud link</label><div class="url-field"><input id="sc-url" name="url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/artist/track" aria-describedby="sc-download-message"><button id="sc-paste-url" class="secondary" type="button">Paste</button></div>
+<div class="format-row"><div><label for="sc-format">Audio format</label><select id="sc-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select></div><p id="sc-format-help" class="format-help"></p></div>
+<div class="destination"><div><span class="small muted">Save to</span><p id="sc-destination">Loading settings…</p></div><button type="button" class="text-button" data-goto="settings">Change</button></div>
+<div class="form-bottom download-actions"><button id="sc-download-button" class="primary" type="submit">Download audio <span aria-hidden="true">↓</span></button></div>
+<p id="sc-download-message" class="feedback" role="status" aria-live="polite"></p>
+</form>
+<div class="queue-heading"><h2>Downloads <span id="sc-queue-count" class="count">0</span></h2><button id="sc-open-folder" class="text-button">Open folder ↗</button></div>
+<div id="sc-jobs" aria-label="Current session SoundCloud downloads"><div class="empty-state"><span class="empty-icon" aria-hidden="true">♫</span><p>Your next listen starts here.</p><span class="small muted">Downloads will appear here while this app is open.</span></div></div>
 </section>
 <section id="page-analyzer" class="page" aria-labelledby="analyzer-heading" hidden>
 <div class="page-heading"><h1 id="analyzer-heading">BPM and key detector</h1></div>
@@ -52,7 +65,7 @@
 <label for="output-folder">Download folder</label><div class="input-with-button"><input id="output-folder" name="output_folder" required spellcheck="false"><button id="choose-folder" type="button" class="secondary">Choose…</button></div>
 <label for="default-format">Default format</label><select id="default-format" name="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="flac">FLAC</option><option value="ogg">OGG</option></select>
 <label for="analyzer-performance">Analyzer performance</label><select id="analyzer-performance"><option value="low">Low impact</option><option value="balanced">Balanced</option><option value="maximum">Maximum speed</option></select>
-<details><summary>Connection &amp; queue</summary><label for="proxy">Proxy URL <span class="muted">(optional)</span></label><input id="proxy" name="proxy" type="password" autocomplete="off" placeholder="http://127.0.0.1:8080"><p class="field-help">Used for downloads, tool setup, and release checks. Leave blank for your normal connection.</p><label for="daily-cap">Download jobs per session</label><input id="daily-cap" name="daily_cap" type="number" min="1" max="10000" required><p class="field-help">A playlist is one job, capped at 100 videos.</p></details>
+<details><summary>Connection &amp; queue</summary><label for="proxy">Proxy URL <span class="muted">(optional)</span></label><input id="proxy" name="proxy" type="password" autocomplete="off" placeholder="http://127.0.0.1:8080"><p class="field-help">Used for downloads, tool setup, and release checks. Leave blank for your normal connection.</p><label for="daily-cap">Download jobs per session</label><input id="daily-cap" name="daily_cap" type="number" min="1" max="10000" required><p class="field-help">A playlist is one job, capped at 100 tracks.</p></details>
 <div class="form-bottom"><p id="settings-message" class="feedback" role="status" aria-live="polite"></p><button id="save-settings" class="primary" type="submit">Save preferences</button></div>
 </form></section>
 <section id="page-info" class="page" aria-labelledby="info-heading" hidden>
@@ -63,7 +76,7 @@
 </section>
 </main>
 </div></div>
-<dialog id="playlist-dialog"><h2>Download this playlist?</h2><p>Up to 100 videos will be processed, one at a time. You can cancel at any point.</p><div class="button-row"><button id="playlist-no" class="secondary">Go back</button><button id="playlist-yes" class="primary">Download playlist</button></div></dialog>
+<dialog id="playlist-dialog"><h2>Download this playlist?</h2><p>Up to 100 tracks will be processed, one at a time. You can cancel at any point.</p><div class="button-row"><button id="playlist-no" class="secondary">Go back</button><button id="playlist-yes" class="primary">Download playlist</button></div></dialog>
 <script src="/static/app.js" defer></script>
 <script src="/static/analyzer.js" defer></script>
 </body></html>

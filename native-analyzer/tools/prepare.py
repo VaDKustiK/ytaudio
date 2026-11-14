@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fetch only hash-pinned artifacts into ignored build storage. No runtime Python."""
-import argparse, hashlib, json, os, pathlib, platform, shutil, tarfile, tempfile, urllib.request, zipfile
+import argparse, hashlib, http.client, json, os, pathlib, platform, shutil, sys, tarfile, tempfile, time, urllib.error, urllib.request, zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 LOCK=json.loads((ROOT/'native-analyzer/sources.lock.json').read_text())
 
@@ -14,12 +14,9 @@ def prepare_key_model(models):
     models.mkdir(parents=True,exist_ok=True)
     shutil.copy2(source,models/'keynet.onnx')
 
-def fetch(name, cache):
-    entry=LOCK[name]; path=cache/name
-    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']: return path
-    path.parent.mkdir(parents=True,exist_ok=True)
-    request=urllib.request.Request(entry['url'],headers={'User-Agent':'ytaudio-analyzer-build/1'})
-    with tempfile.NamedTemporaryFile(dir=cache,delete=False) as output:
+def download_verified(url, entry, path):
+    request=urllib.request.Request(url,headers={'User-Agent':'ytaudio-analyzer-build/1'})
+    with tempfile.NamedTemporaryFile(dir=path.parent,delete=False) as output:
         temp=pathlib.Path(output.name)
         try:
             with urllib.request.urlopen(request,timeout=180) as response:
@@ -28,10 +25,41 @@ def fetch(name, cache):
                     total+=len(chunk)
                     if total>entry['size']: raise ValueError('Unexpected artifact size')
                     digest.update(chunk);output.write(chunk)
-            if total!=entry['size'] or digest.hexdigest()!=entry['sha256']: raise ValueError(f'Integrity failure: {name}')
+            if total!=entry['size']: raise http.client.IncompleteRead(b'',entry['size']-total)
+            if digest.hexdigest()!=entry['sha256']: raise ValueError(f'Integrity failure: {path.name}')
             output.close();temp.replace(path)
-        finally: temp.unlink(missing_ok=True)
-    return path
+        finally:
+            # Windows cannot remove an open temporary file after a failed read.
+            output.close();temp.unlink(missing_ok=True)
+
+def fetch(name, cache):
+    entry=LOCK[name]; path=cache/name
+    if path.exists() and path.stat().st_size==entry['size'] and hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']: return path
+    path.parent.mkdir(parents=True,exist_ok=True)
+    # Mirrors are pinned in the lock file; every source must supply the exact
+    # same bytes. Never accept a different checkpoint or skip a reference gate.
+    pending=list(dict.fromkeys([entry['url'],*entry.get('mirrors',[])]))
+    last_error=None
+    for attempt in range(3):
+        retry=[]
+        for url in pending:
+            try:
+                download_verified(url,entry,path)
+                return path
+            except urllib.error.HTTPError as error:
+                last_error=error
+                if error.code in (408,429) or 500<=error.code<600: retry.append(url)
+                print(f'{name}: download source returned HTTP {error.code}; trying remaining sources.',file=sys.stderr,flush=True)
+                error.close()
+            except (urllib.error.URLError,TimeoutError,ConnectionError,http.client.IncompleteRead) as error:
+                last_error=error;retry.append(url)
+                print(f'{name}: download interrupted; trying remaining sources.',file=sys.stderr,flush=True)
+        pending=retry
+        if not pending or attempt==2: break
+        delay=2**attempt
+        print(f'{name}: retrying download in {delay}s (attempt {attempt+2}/3).',file=sys.stderr,flush=True)
+        time.sleep(delay)
+    raise RuntimeError(f'Could not download {name} from its pinned sources: {last_error}. Retry when the provider is available, or place the exact hash-verified artifact in {path}.') from last_error
 
 def extract(archive, target):
     # A fresh extraction avoids stale libraries, symlink aliases and mixed SDKs.

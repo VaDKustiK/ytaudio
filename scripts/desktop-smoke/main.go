@@ -68,6 +68,16 @@ func main() {
  const settings=await(await fetch('/api/settings')).json();if(!settings.output_folder)throw Error('settings');
  if(!document.querySelector('#format-help').textContent)throw Error('app.js did not initialize');
  document.querySelector('[data-page="settings"]').click();if(document.querySelector('#page-settings').hidden)throw Error('navigation');
+ document.querySelector('[data-page="soundcloud"]').click();if(document.querySelector('#page-soundcloud').hidden)throw Error('SoundCloud navigation');
+ if(!document.querySelector('#sc-format-help').textContent)throw Error('SoundCloud settings');
+ try{
+ await window.runtime.ClipboardSetText('https://soundcloud.com/artist/song');
+ document.querySelector('#sc-paste-url').click();
+ for(let i=0;i<30&&document.querySelector('#sc-url').value!=='https://soundcloud.com/artist/song';i++)await new Promise(r=>setTimeout(r,50));
+ if(document.querySelector('#sc-url').value!=='https://soundcloud.com/artist/song')throw Error('SoundCloud native paste');
+ }finally{await window.runtime.ClipboardSetText(previous);}
+ const scLink=await fetch('/api/resolve-link',{method:'POST',headers:{'Content-Type':'application/json','X-Ytaudio-Token':token},body:JSON.stringify({source:'soundcloud',url:'https://soundcloud.com/artist/sets/album?si=tracking'})});
+ const resolved=await scLink.json();if(!scLink.ok||!resolved.playlist||resolved.url!=='https://soundcloud.com/artist/sets/album')throw Error('SoundCloud native link bridge');
  const rejected=await fetch('/api/setup');if(rejected.status!==405)throw Error('GET setup accepted');
  const result=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json','X-Ytaudio-Token':token},body:JSON.stringify({...settings,proxy:'ftp://invalid'})});if(result.status!==400 && result.status!==409)throw Error('POST/body bridge: '+result.status);
  if(window.smokeAudioExpected.enabled){

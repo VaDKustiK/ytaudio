@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=ytaudio
-Comment=Simple, local YouTube audio downloads
+Comment=Local YouTube and SoundCloud audio downloads
 Exec=ytaudio
 Icon=ytaudio
 Terminal=false

@@ -59,11 +59,18 @@ func BuildArgs(rawURL, outputFolder string, format Format) ([]string, error) {
 }
 
 func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist bool) ([]string, error) {
-	var err error
-	rawURL, err = urlcheck.Normalize(rawURL)
+	return BuildArgsForSource(rawURL, outputFolder, format, playlist, urlcheck.YouTube)
+}
+
+func BuildArgsForSource(rawURL, outputFolder string, format Format, playlist bool, source urlcheck.Source) ([]string, error) {
+	link, err := urlcheck.Parse(rawURL, source)
 	if err != nil {
 		return nil, err
 	}
+	if link.Short {
+		return nil, fmt.Errorf("expand the SoundCloud share link before downloading")
+	}
+	rawURL = link.URL
 	if outputFolder == "" || !filepath.IsAbs(outputFolder) {
 		return nil, fmt.Errorf("output folder must be an absolute path")
 	}
@@ -74,7 +81,14 @@ func BuildArgsWithPlaylist(rawURL, outputFolder string, format Format, playlist 
 	} else {
 		args = append(args, "--no-playlist")
 	}
-	args = append(args, "-f", "bestaudio/best")
+	selector := "bestaudio/best"
+	if link.Source == urlcheck.SoundCloud {
+		// yt-dlp labels snipped/30-second SoundCloud formats with 'preview'.
+		// Apply the filter to both fallbacks so a preview never becomes a song.
+		selector = "bestaudio[format_id!*=preview]/best[format_id!*=preview]"
+		args = append(args, "--no-cookies", "--no-cookies-from-browser", "--use-extractors", "soundcloud,soundcloud:set")
+	}
+	args = append(args, "-f", selector)
 	switch format {
 	case MP3:
 		args = append(args, "-x", "--audio-format", "mp3", "--audio-quality", "0")
