@@ -116,14 +116,7 @@ function renderDownloadJobs(jobs, view) {
   downloadNode(view, "queue-count").textContent = jobs.filter(j => ["queued", "running"].includes(j.state)).length;
   const ids = new Set(jobs.map(j => j.id));
   for (const [id, row] of rows) if (!ids.has(id)) { row.remove(); rows.delete(id); }
-  container.querySelector(".empty-state")?.remove();
-  if (!jobs.length) {
-    const empty = document.createElement("div"); empty.className = "empty-state";
-    const icon = document.createElement("span"); icon.className = "empty-icon"; icon.textContent = "♫";
-    const text = document.createElement("p"); text.textContent = "Your next listen starts here.";
-    const help = document.createElement("span"); help.className = "small muted"; help.textContent = "Downloads will appear here while this app is open.";
-    empty.append(icon, text, help); container.append(empty);
-  }
+  container.querySelector(".empty-state").hidden = jobs.length > 0;
   for (const job of jobs) {
     let row = rows.get(job.id);
     if (!row) {

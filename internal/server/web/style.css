@@ -367,8 +367,7 @@ input::placeholder {
   font-size:25px;
 }
 .empty-state p {
-  font-size:12px;
-  margin:9px 0;
+  margin:9px 0 0;
 }
 .small {
   font-size:11px;
@@ -455,6 +454,9 @@ progress::-moz-progress-bar {
 .settings-panel>select {
   max-width:250px;
   margin-bottom:25px;
+}
+#analyzer-performance {
+  margin-bottom:0;
 }
 .settings-panel > .input-with-button {
   margin-bottom:24px;

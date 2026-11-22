@@ -138,16 +138,18 @@ type File struct {
 	Name string `json:"name"`
 }
 type State struct {
-	ID           string  `json:"id"`
-	FileID       string  `json:"file_id"`
-	Name         string  `json:"name"`
-	Status       string  `json:"status"`
-	Stage        string  `json:"stage"`
-	Percent      float64 `json:"percent"`
-	Error        string  `json:"error,omitempty"`
-	Result       *Result `json:"result,omitempty"`
-	Cached       bool    `json:"cached"`
-	Ready        bool    `json:"ready"`
-	Installing   bool    `json:"installing"`
-	InstallError string  `json:"install_error,omitempty"`
+	ID             string  `json:"id"`
+	FileID         string  `json:"file_id"`
+	Name           string  `json:"name"`
+	Status         string  `json:"status"`
+	Stage          string  `json:"stage"`
+	Percent        float64 `json:"percent"`
+	Error          string  `json:"error,omitempty"`
+	Result         *Result `json:"result,omitempty"`
+	Cached         bool    `json:"cached"`
+	Ready          bool    `json:"ready"`
+	Installing     bool    `json:"installing"`
+	InstallError   string  `json:"install_error,omitempty"`
+	InstallStage   string  `json:"install_stage,omitempty"`
+	InstallPercent *int    `json:"install_percent,omitempty"`
 }

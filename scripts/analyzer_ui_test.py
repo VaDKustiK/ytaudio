@@ -75,17 +75,46 @@ def test(binary,component):
                 page.locator('[data-page=soundcloud]').click();page.locator('#sc-jobs').get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000)
                 expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name)
                 expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
-                # First-time setup preserves the same automatic handoff too.
-                setup_pending=[True]
+                # Setup progress and completion appear without starting analysis.
+                setup_state={'ready':False,'status':'idle','installing':False}
                 def analyzer_state(route):
-                    if setup_pending[0] and route.request.method=='GET':route.fulfill(status=200,content_type='application/json',body=json.dumps({'ready':False,'status':'idle','installing':False}))
+                    if setup_state is not None and route.request.method=='GET':route.fulfill(status=200,content_type='application/json',body=json.dumps(setup_state))
                     else:route.continue_()
                 def install_component(route):
-                    setup_pending[0]=False
-                    route.fulfill(status=200,content_type='application/json',body=json.dumps({'ready':True,'status':'idle','installing':False}))
+                    setup_state.update(ready=False,installing=True,install_stage='Downloading analyzer models…',install_percent=35)
+                    setup_state.pop('install_error',None)
+                    route.fulfill(status=200,content_type='application/json',body=json.dumps(setup_state))
                 page.route('**/api/analysis',analyzer_state);page.route('**/api/analysis/install',install_component)
                 expect(page.locator('#install-analyzer')).to_be_visible()
-                page.locator('[data-page=soundcloud]').click();page.locator('#sc-jobs').get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000);expect(page.locator('#page-analyzer')).to_be_visible();expect(page.locator('#audio-name')).to_have_text(audio.name);page.locator('#install-analyzer').click();expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
+                page.locator('#install-analyzer').click()
+                setup_bar=page.locator('#analyzer-install-progress')
+                setup_message=page.locator('#analyzer-install-message')
+                expect(setup_message).to_have_text('Downloading analyzer models…')
+                expect(setup_bar).to_be_visible();expect(setup_bar).to_have_attribute('value','35')
+                expect(page.locator('#analyze-audio')).to_be_disabled()
+                setup_state.update(installing=False,install_error='Analyzer download failed. Try again.')
+                expect(setup_message).to_have_text('Analyzer download failed. Try again.')
+                expect(setup_bar).to_be_hidden();expect(page.locator('#install-analyzer')).to_be_enabled()
+                page.locator('#install-analyzer').click()
+                expect(setup_bar).to_be_visible()
+                setup_state.pop('install_percent')
+                setup_state['install_stage']='Extracting and verifying analyzer files…'
+                expect(setup_message).to_have_text('Extracting and verifying analyzer files…')
+                assert setup_bar.get_attribute('value') is None
+                setup_state.update(installing=False,ready=True)
+                expect(setup_message).to_have_text('Analyzer ready.')
+                expect(setup_bar).to_be_hidden();expect(page.locator('#install-analyzer')).to_be_hidden()
+                expect(page.locator('#analyze-audio')).to_be_enabled()
+                # First-time setup still starts the analysis requested from a download.
+                setup_state={'ready':False,'status':'idle','installing':False}
+                expect(page.locator('#install-analyzer')).to_be_visible()
+                page.locator('[data-page=soundcloud]').click()
+                page.locator('#sc-jobs').get_by_role('button',name='BPM and key detection',exact=True).click(timeout=10000)
+                expect(page.locator('#audio-name')).to_have_text(audio.name)
+                expect(page.locator('#analysis-results')).to_be_hidden()
+                page.locator('#install-analyzer').click();expect(setup_bar).to_be_visible()
+                setup_state=None
+                expect(page.locator('#analysis-results')).to_be_visible(timeout=30000)
                 page.locator('[data-page=settings]').click();page.locator('#analyzer-performance').select_option('low');page.locator('#save-settings').click();expect(page.locator('#settings-message')).to_have_text('Preferences saved.')
                 assert json.loads((cfg/'config.json').read_text())['analyzer_performance']=='low'
                 # Browser mode supports the actual file-input/drag-upload route too.

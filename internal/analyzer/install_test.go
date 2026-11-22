@@ -3,6 +3,7 @@ package analyzer
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,39 @@ import (
 type releaseTransport func(*http.Request) (*http.Response, error)
 
 func (f releaseTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestAnalyzerDownloadReportsProgressWithKnownSize(t *testing.T) {
+	payload := bytes.Repeat([]byte("archive fixture"), 16<<10)
+	asset := deps.ReleaseAsset{URL: "https://example.invalid/analyzer.zip", Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(payload))}
+	for _, size := range []int64{int64(len(payload)), -1} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			client := &http.Client{Transport: releaseTransport(func(req *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(payload)), ContentLength: size, Request: req}, nil
+			})}
+			var updates []int
+			err := download(context.Background(), client, asset, filepath.Join(t.TempDir(), "download.zip"), func(percent int) {
+				updates = append(updates, percent)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if size < 0 {
+				if len(updates) != 0 {
+					t.Fatalf("unknown size produced percentages: %v", updates)
+				}
+				return
+			}
+			if len(updates) < 3 || updates[0] != 0 || updates[len(updates)-1] != 99 {
+				t.Fatalf("expected intermediate progress and no premature completion: %v", updates)
+			}
+			for i := 1; i < len(updates); i++ {
+				if updates[i] <= updates[i-1] {
+					t.Fatalf("progress did not advance: %v", updates)
+				}
+			}
+		})
+	}
+}
 
 // Exercise the actual release archives and activation code without contacting
 // GitHub or publishing a development build. Only the network transport is fake.

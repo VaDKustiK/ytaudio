@@ -1,6 +1,7 @@
 "use strict";
 let selectedAudio = null, analysisState = null, audioSelection = 0, analysisCopy = "", pendingAnalysisID = null;
 let selectedAnalysisID = null, requestSelection = null, analysisError = "";
+let installSubmitting = false, installRequestError = "";
 function analysisFailure(message) {
   analysisError = message; feedback("#analysis-message", message, true);
 }
@@ -11,14 +12,13 @@ function selectAnalysisFile(file, start = false) {
   $("#audio-name").textContent = file.name;
   $("#analysis-results").hidden = true; $("#copy-analysis").hidden = true;
   feedback("#analysis-message", "");
-  $("#analyze-audio").disabled = !analysisState?.ready || analysisState?.installing;
+  $("#analyze-audio").disabled = !analysisState?.ready || analysisState.installing || installSubmitting;
   if (start) startAnalysis();
 }
 async function startAnalysis() {
   if (!selectedAudio) return;
-  if (!analysisState?.ready) {
+  if (!analysisState?.ready || analysisState.installing || installSubmitting) {
     pendingAnalysisID = selectedAudio.id;
-    feedback("#analysis-message", "Install the analyzer to analyze this file.");
     return;
   }
   pendingAnalysisID = null;
@@ -38,28 +38,42 @@ async function startAnalysis() {
     }
   }
 }
+function renderAnalyzerInstall(state) {
+  const installing = Boolean(state?.installing || installSubmitting);
+  const error = installing ? "" : installRequestError || state?.install_error;
+  const button = $("#install-analyzer");
+  button.hidden = !state || (state.ready && !installing && !error);
+  button.disabled = installing;
+  button.textContent = installing ? "Installing…" : state?.ready ? "Repair analyzer" : "Install analyzer";
+
+  const message = installing ? state?.install_stage || "Starting analyzer setup…"
+    : error || (state?.ready ? "Analyzer ready." : "Install the analyzer once to analyze audio offline.");
+  const status = $("#analyzer-install-message");
+  if (status.textContent !== message) status.textContent = message;
+  status.classList.toggle("error", Boolean(error));
+
+  const progress = $("#analyzer-install-progress");
+  progress.hidden = !installing;
+  if (installing && Number.isFinite(state?.install_percent)) progress.value = state.install_percent;
+  else progress.removeAttribute("value");
+}
 function renderAnalysis(state) {
   analysisState = state;
-  if (state.ready && !state.installing && !state.install_error && pendingAnalysisID && pendingAnalysisID === selectedAudio?.id) {
+  if (state.ready && !state.installing && !installSubmitting && !state.install_error && pendingAnalysisID && pendingAnalysisID === selectedAudio?.id) {
     pendingAnalysisID = null; Promise.resolve().then(startAnalysis);
   }
-  $("#install-analyzer").hidden = state.ready && !state.install_error;
-  $("#install-analyzer").disabled = state.installing;
-  $("#install-analyzer").textContent = state.installing ? "Installing…" : state.ready ? "Repair analyzer" : "Install analyzer";
+  renderAnalyzerInstall(state);
   const belongs = selectedAudio && state.file_id === selectedAudio.id && state.id === selectedAnalysisID;
   const busy = ["queued", "running"].includes(state.status);
   $("#cancel-analysis").hidden = !busy;
-  $("#analyze-audio").disabled = !selectedAudio || !state.ready || state.installing || requestSelection === audioSelection || (belongs && busy);
-  if (!state.ready || state.installing || state.install_error) {
-    feedback("#analysis-message", analysisError || state.install_error || (state.installing ? "Installing analyzer…" : "Install the analyzer once to analyze audio offline."), Boolean(analysisError || state.install_error));
-  }
+  $("#analyze-audio").disabled = !selectedAudio || !state.ready || state.installing || installSubmitting || requestSelection === audioSelection || (belongs && busy);
   // An older request must not replace results for a newly selected file.
   if (!belongs) {
     $("#analysis-progress").hidden = true;
     if (analysisError) feedback("#analysis-message", analysisError, true);
     return;
   }
-  feedback("#analysis-message", analysisError || state.install_error || state.error || (state.status === "complete" ? "" : state.stage), Boolean(analysisError || state.install_error || state.error));
+  feedback("#analysis-message", analysisError || state.error || (state.status === "complete" ? "" : state.stage), Boolean(analysisError || state.error));
   $("#analysis-progress").hidden = !busy; $("#analysis-progress").value = state.percent;
   $("#analysis-results").hidden = !state.result; $("#copy-analysis").hidden = !state.result;
   if (!state.result) return;
@@ -104,7 +118,20 @@ $("#audio-drop").addEventListener("keydown", event => {if (event.target === $("#
 $("#audio-file").addEventListener("change", event => {uploadAudio(event.target.files[0]); event.target.value = "";});
 $("#analyze-audio").addEventListener("click", startAnalysis);
 $("#cancel-analysis").addEventListener("click", async () => {try {await api("/api/analysis", "DELETE"); await refreshAnalysis();} catch (error) {feedback("#analysis-message", error.message, true);}});
-$("#install-analyzer").addEventListener("click", async () => {try {renderAnalysis(await api("/api/analysis/install", "POST"));} catch (error) {feedback("#analysis-message", error.message, true);}});
+$("#install-analyzer").addEventListener("click", async () => {
+  if (installSubmitting) return;
+  installSubmitting = true;
+  installRequestError = "";
+  renderAnalysis(analysisState);
+  try {
+    analysisState = await api("/api/analysis/install", "POST");
+  } catch (error) {
+    installRequestError = error.message;
+  } finally {
+    installSubmitting = false;
+    renderAnalysis(analysisState);
+  }
+});
 $("#copy-analysis").addEventListener("click", async () => {
   try { if (window.runtime?.ClipboardSetText) await window.runtime.ClipboardSetText(analysisCopy); else await navigator.clipboard.writeText(analysisCopy); feedback("#analysis-message", "Copied"); }
   catch {feedback("#analysis-message", "Unable to copy results.", true);}

@@ -139,6 +139,8 @@ func (m *Manager) Install() error {
 	proxy := m.proxy
 	m.state.Installing = true
 	m.state.InstallError = ""
+	m.state.InstallStage = "Checking for analyzer packages…"
+	m.state.InstallPercent = nil
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -148,13 +150,25 @@ func (m *Manager) Install() error {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		m.state.Installing = false
+		m.state.InstallStage = ""
+		m.state.InstallPercent = nil
 		m.state.Ready = m.available()
+		if err == nil && !m.state.Ready {
+			err = fmt.Errorf("analyzer setup could not be verified; try again")
+		}
 		if err != nil {
 			m.state.InstallError = err.Error()
 		}
 	}()
 	return nil
 }
+func (m *Manager) reportInstall(stage string, percent *int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.state.InstallStage = stage
+	m.state.InstallPercent = percent
+}
+
 func (m *Manager) install(ctx context.Context, proxy string) error {
 	client, err := deps.HTTPClient(proxy)
 	if err != nil {
@@ -193,6 +207,7 @@ func (m *Manager) installWithClient(ctx context.Context, client *http.Client) er
 	for _, name := range []string{modelName, engineName} {
 		// Unchanged models survive app updates and need no network download.
 		if name == modelName {
+			m.reportInstall("Checking installed models…", nil)
 			directory := filepath.Join(m.root, "models", ModelsVersion)
 			if verifyComponent(ctx, directory, true) == nil {
 				installed.Models = "models/" + ModelsVersion
@@ -219,9 +234,17 @@ func (m *Manager) installWithClient(ctx context.Context, client *http.Client) er
 		e = func() error {
 			defer os.RemoveAll(staging)
 			archive := filepath.Join(staging, "download.zip")
-			if err := download(ctx, client, asset, archive); err != nil {
+			stage := "Downloading analyzer runtime…"
+			if name == modelName {
+				stage = "Downloading analyzer models…"
+			}
+			m.reportInstall(stage, nil)
+			if err := download(ctx, client, asset, archive, func(percent int) {
+				m.reportInstall(stage, &percent)
+			}); err != nil {
 				return err
 			}
+			m.reportInstall("Extracting and verifying analyzer files…", nil)
 			directory := filepath.Join(staging, "component")
 			if err := extractArchive(archive, directory); err != nil {
 				return err
@@ -270,6 +293,7 @@ func (m *Manager) installWithClient(ctx context.Context, client *http.Client) er
 	if installed.Engine == "" || installed.Models == "" {
 		return fmt.Errorf("incomplete analyzer package")
 	}
+	m.reportInstall("Finishing analyzer setup…", nil)
 	data, _ := json.Marshal(installed)
 	temp, err := os.CreateTemp(m.root, ".installed-")
 	if err != nil {
@@ -286,7 +310,7 @@ func (m *Manager) installWithClient(ctx context.Context, client *http.Client) er
 	}
 	return os.Rename(name, filepath.Join(m.root, "installed.json"))
 }
-func download(ctx context.Context, client *http.Client, asset deps.ReleaseAsset, path string) error {
+func download(ctx context.Context, client *http.Client, asset deps.ReleaseAsset, path string, report func(int)) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", asset.URL, nil)
 	if err != nil {
 		return err
@@ -306,17 +330,42 @@ func download(ctx context.Context, client *http.Client, asset deps.ReleaseAsset,
 	}
 	defer f.Close()
 	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(response.Body, (512<<20)+1))
+	const maxArchive = 512 << 20
+	var progress downloadProgress
+	if report != nil && response.ContentLength > 0 && response.ContentLength <= maxArchive {
+		progress.total = response.ContentLength
+		progress.report = report
+		report(0)
+	}
+	n, err := io.Copy(io.MultiWriter(f, h, &progress), io.LimitReader(response.Body, maxArchive+1))
 	if err != nil {
 		return err
 	}
-	if n > 512<<20 {
+	if n > maxArchive {
 		return fmt.Errorf("analyzer archive too large")
 	}
 	if hex.EncodeToString(h.Sum(nil)) != strings.TrimPrefix(asset.Digest, "sha256:") {
 		return fmt.Errorf("analyzer download checksum mismatch")
 	}
 	return nil
+}
+
+type downloadProgress struct {
+	received, total int64
+	percent         int
+	report          func(int)
+}
+
+func (p *downloadProgress) Write(data []byte) (int, error) {
+	if p.report != nil {
+		p.received += int64(len(data))
+		percent := min(99, int(100*p.received/p.total))
+		if percent > p.percent {
+			p.percent = percent
+			p.report(percent)
+		}
+	}
+	return len(data), nil
 }
 func extractArchive(archive, directory string) error {
 	z, err := zip.OpenReader(archive)
