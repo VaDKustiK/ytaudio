@@ -42,30 +42,10 @@
     "sha256": "8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331",
     "size": 81058141
   },
-  "onnxruntime-linux-x64-1.23.2.tgz": {
-    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz",
-    "sha256": "1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b",
-    "size": 8309231
-  },
-  "onnxruntime-linux-aarch64-1.23.2.tgz": {
-    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-aarch64-1.23.2.tgz",
-    "sha256": "7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c",
-    "size": 7254068
-  },
-  "onnxruntime-win-x64-1.23.2.zip": {
-    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-x64-1.23.2.zip",
-    "sha256": "0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd",
-    "size": 78127794
-  },
-  "onnxruntime-win-arm64-1.23.2.zip": {
-    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-arm64-1.23.2.zip",
-    "sha256": "1cfe88b6435df3b5fb0e9f6bd7d6f5df1e887b6174de7f6e2a47bab956f3f168",
-    "size": 78932411
-  },
-  "onnxruntime-osx-arm64-1.23.2.tgz": {
-    "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-osx-arm64-1.23.2.tgz",
-    "sha256": "b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856",
-    "size": 9999931
+  "microsoft.ml.onnxruntime.1.23.2.nupkg": {
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg",
+    "sha256": "25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a",
+    "size": 123371574
   },
   "beat-reference.tar.gz": {
     "url": "https://codeload.github.com/CPJKU/beat_this/tar.gz/b95c8ab0c58c2d9fcfd40508ae8dffbc05ac4f5c",

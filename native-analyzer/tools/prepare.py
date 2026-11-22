@@ -3,6 +3,15 @@
 import argparse, hashlib, http.client, json, os, pathlib, platform, shutil, sys, tarfile, tempfile, time, urllib.error, urllib.request, zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 LOCK=json.loads((ROOT/'native-analyzer/sources.lock.json').read_text())
+ORT_VERSION = '1.23.2'
+ORT_PACKAGE = f'microsoft.ml.onnxruntime.{ORT_VERSION}.nupkg'
+ORT_TARGETS = {
+    'linux-amd64': 'linux-x64',
+    'linux-arm64': 'linux-arm64',
+    'windows-amd64': 'win-x64',
+    'windows-arm64': 'win-arm64',
+    'darwin-arm64': 'osx-arm64',
+}
 
 def prepare_key_model(models):
     # Exporting on each host is not guaranteed to produce identical ONNX bytes.
@@ -82,22 +91,51 @@ def copy_member(name, data, target):
     if len(path.parts)<2:return
     destination=target.joinpath(*path.parts[1:]);destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(data)
 
+def extract_ort(archive, target, rid):
+    """Stage a C++ SDK from the native files in Microsoft's NuGet package."""
+    prefix = f'runtimes/{rid}/native'
+    if rid.startswith('win-'):
+        names = ('onnxruntime.dll', 'onnxruntime.lib', 'onnxruntime_providers_shared.dll')
+        libraries = {name: name for name in names}
+    elif rid.startswith('osx-'):
+        libraries = {'libonnxruntime.dylib': f'libonnxruntime.{ORT_VERSION}.dylib'}
+    else:
+        libraries = {'libonnxruntime.so': 'libonnxruntime.so.1'}
+
+    with tempfile.TemporaryDirectory(dir=target.parent, prefix='.ort-') as staging:
+        sdk = pathlib.Path(staging) / 'sdk'
+        (sdk / 'include').mkdir(parents=True)
+        (sdk / 'lib').mkdir()
+        with zipfile.ZipFile(archive) as source:
+            members = {f'{prefix}/{name}': f'lib/{dest}' for name, dest in libraries.items()}
+            members.update({name: name for name in ('LICENSE', 'ThirdPartyNotices.txt')})
+            for name in source.namelist():
+                parent, _, filename = name.rpartition('/')
+                if parent == 'build/native/include' and filename.endswith('.h'):
+                    members[name] = f'include/{filename}'
+            if 'build/native/include/onnxruntime_cxx_api.h' not in members:
+                raise ValueError('ONNX Runtime C++ headers are missing')
+            for member, relative in members.items():
+                if '\\' in relative or ':' in relative:
+                    raise ValueError('Unsafe ONNX Runtime header name')
+                with source.open(member) as data, (sdk / relative).open('wb') as output:
+                    shutil.copyfileobj(data, output)
+
+        # CMake links the unversioned name, while the OS loader uses the
+        # versioned library name shipped in the runtime archive.
+        for name, destination in libraries.items():
+            if name != destination:
+                shutil.copy2(sdk / 'lib' / destination, sdk / 'lib' / name)
+        if target.exists():
+            shutil.rmtree(target)
+        sdk.rename(target)
+
 def prepare(target,cache):
     deps=ROOT/'build/analyzer/deps';deps.mkdir(parents=True,exist_ok=True)
     for artifact,directory in [('beat-source.tar.gz','beat'),('key-source.tar.gz','key'),('pocketfft.tar.gz','pocketfft'),('r8brain.tar.gz','r8brain')]:
         extract(fetch(artifact,cache),deps/directory)
     (deps/'nlohmann').mkdir(exist_ok=True);shutil.copy2(fetch('json.hpp',cache),deps/'nlohmann/json.hpp')
-    sdk={'linux-amd64':'linux-x64','linux-arm64':'linux-aarch64','windows-amd64':'win-x64','windows-arm64':'win-arm64','darwin-arm64':'osx-arm64'}[target]
-    extension='zip' if sdk.startswith('win') else 'tgz'
-    extract(fetch(f'onnxruntime-{sdk}-1.23.2.{extension}',cache),deps/'ort')
-    # Tar SDKs use symlinks for their canonical SONAME. They were intentionally
-    # not extracted; reconstruct only this known library alias from verified files.
-    if not sdk.startswith('win'):
-        lib=deps/'ort/lib';pattern='libonnxruntime*.dylib' if sdk.startswith('osx') else 'libonnxruntime.so.*'
-        real=next(p for p in lib.glob(pattern) if p.is_file())
-        name='libonnxruntime.dylib' if sdk.startswith('osx') else 'libonnxruntime.so'
-        shutil.copy2(real,lib/name)
-        if not sdk.startswith('osx'):shutil.copy2(real,lib/'libonnxruntime.so.1')
+    extract_ort(fetch(ORT_PACKAGE,cache),deps/'ort',ORT_TARGETS[target])
     models=ROOT/'build/analyzer/models';models.mkdir(parents=True,exist_ok=True)
     source=deps/'beat/onnx/beat_this.onnx'
     if hashlib.sha256(source.read_bytes()).hexdigest()!=LOCK['beat_this.onnx']['sha256']:raise ValueError('Upstream beat model hash mismatch')

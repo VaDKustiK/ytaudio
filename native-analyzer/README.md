@@ -40,7 +40,9 @@ The models run sequentially with thread spinning disabled and one active job.
   no claim is made that the training datasets are licensed by the code license.
   Published exact-key accuracy is 66.72% on its evaluation, not a guarantee for
   hip-hop/trap/drill/R&B. CQT preprocessing must be reproduced and tested.
-- ONNX Runtime 1.23.2: MIT, CPU only. Pin the native SDK per target.
+- ONNX Runtime 1.23.2: MIT, CPU only. The build uses Microsoft's pinned
+  [NuGet package](https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.23.2)
+  for the C++ headers and target-specific native libraries.
 - PocketFFT `0fa0ef591e38c2758e3184c6c23e497b9f732ffa`: BSD-3-Clause.
 - r8brain `e71c31bf320f84210bb4bdcb57e296c39ce940f9`: MIT.
 - nlohmann/json 3.12.0: MIT.
@@ -290,8 +292,10 @@ replacement leaves the active installation available. Analysis never downloads
 models or audio; first setup requires connectivity. The main installer and
 ordinary downloader dependency repair remain separate.
 
-SDK archives for all five targets are hash-pinned. The native CI matrix builds
-and executes unit/input/package smoke tests on actual target runners. Workflow
+The SDK package is verified by size and SHA-256 before extracting each target's
+files. The release includes only the runtime libraries and notices needed by
+that target. The native CI matrix builds and runs unit, input, and package
+smoke tests on the target runners. Workflow
 definitions are checked with actionlint. Production POSIX executables are stripped
 before hashing/signing. Windows
 packages exclude debug symbols and carry app-local permitted VC runtime DLLs; macOS

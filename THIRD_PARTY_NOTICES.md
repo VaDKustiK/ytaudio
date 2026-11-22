@@ -56,7 +56,7 @@ The analyzer packages redistribute these components with their license texts:
   alongside the artifact. Packaging verifies its pinned SHA-256 on every target;
   fresh exports are numerical checks and do not replace the shipped model.
 - ONNX Runtime CPU 1.23.2: MIT, with its own third-party notices.
-  https://github.com/microsoft/onnxruntime
+  Native libraries come from [Microsoft's NuGet package](https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime/1.23.2).
 - PocketFFT: BSD-3-Clause. https://github.com/mreineck/pocketfft
 - r8brain-free-src: MIT. https://github.com/avaneev/r8brain-free-src
 - nlohmann/json 3.12.0: MIT. https://github.com/nlohmann/json
