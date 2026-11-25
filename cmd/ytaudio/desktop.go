@@ -11,6 +11,7 @@ import (
 
 	"github.com/VaDKustiK/ytaudio/internal/config"
 	"github.com/VaDKustiK/ytaudio/internal/server"
+	"github.com/VaDKustiK/ytaudio/internal/update"
 	"github.com/VaDKustiK/ytaudio/packaging"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -23,10 +24,22 @@ var version = "dev"
 
 func main() {
 	versionFlag := flag.Bool("version", false, "print the application version")
+	parent := flag.Int("apply-update", 0, "internal update handoff")
+	updateResult := flag.String("update-result", "", "internal update result")
+	updateCleanup := flag.String("update-cleanup", "", "internal update cleanup")
 	flag.Parse()
 	if *versionFlag {
 		fmt.Println(version)
 		return
+	}
+	if *parent != 0 {
+		if err := update.RunHelper(*parent, version); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+	if *updateCleanup != "" {
+		go update.Cleanup(*updateCleanup)
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -46,6 +59,7 @@ func main() {
 		MinHeight:        600,
 		OnStartup: func(ctx context.Context) {
 			appContext.Store(ctx)
+			app.SetAppUpdater(update.DetectTarget(), *updateResult, func() { wailsruntime.Quit(ctx) })
 			app.SetAudioPicker(func() (string, error) {
 				return wailsruntime.OpenFileDialog(ctx, wailsruntime.OpenDialogOptions{Title: "Choose audio", Filters: []wailsruntime.FileFilter{{DisplayName: "Audio", Pattern: "*.wav;*.mp3;*.flac;*.m4a;*.ogg;*.opus;*.aac;*.aiff;*.aif;*.wma;*.webm;*.mp4"}}})
 			})

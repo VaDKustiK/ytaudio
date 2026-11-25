@@ -30,15 +30,17 @@ type Info struct {
 	Checking      bool           `json:"checking"`
 	Error         string         `json:"error,omitempty"`
 	Notifications []Notification `json:"notifications"`
+	Assets        []Asset        `json:"-"`
 }
 type release struct {
-	TagName    string `json:"tag_name"`
-	Name       string `json:"name"`
-	HTMLURL    string `json:"html_url"`
-	Body       string `json:"body"`
-	Date       string `json:"published_at"`
-	Draft      bool   `json:"draft"`
-	Prerelease bool   `json:"prerelease"`
+	TagName    string  `json:"tag_name"`
+	Name       string  `json:"name"`
+	HTMLURL    string  `json:"html_url"`
+	Body       string  `json:"body"`
+	Date       string  `json:"published_at"`
+	Draft      bool    `json:"draft"`
+	Prerelease bool    `json:"prerelease"`
+	Assets     []Asset `json:"assets"`
 }
 
 func Check(ctx context.Context, current string) Info { return CheckWithProxy(ctx, current, "") }
@@ -89,13 +91,14 @@ func checkWithClient(ctx context.Context, current string, client *http.Client) I
 		return result
 	}
 	for _, r := range releases {
-		if r.Draft || r.Prerelease || !strings.HasPrefix(r.HTMLURL, "https://github.com/"+repository+"/releases/") {
+		if r.Draft || r.Prerelease || !stableVersion(r.TagName) || !strings.HasPrefix(r.HTMLURL, "https://github.com/"+repository+"/releases/") {
 			continue
 		}
-		if result.Latest == "" {
+		if result.Latest == "" || newer(result.Latest, r.TagName) {
 			result.Latest = r.TagName
 			result.URL = r.HTMLURL
 			result.Ready = newer(current, r.TagName)
+			result.Assets = r.Assets
 		}
 		if newer(current, r.TagName) {
 			title := r.Name

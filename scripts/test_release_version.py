@@ -10,12 +10,12 @@ import release_version as release
 
 
 class ReleaseVersionTest(unittest.TestCase):
-    def test_first_stable_release_ignores_prototype_numbers(self):
-        for tags in ({}, {"v0.2.10": "old"}, {"v0.999.999": "old", "v1.0.0-rc.1": "preview"}):
-            self.assertEqual(release.select_version(tags, "new"), "v1.0.0")
+    def test_automatic_release_starts_at_1_1_0(self):
+        for tags in ({}, {"v1.0.0": "old"}, {"v0.999.999": "old", "v1.0.0-rc.1": "preview"}):
+            self.assertEqual(release.select_version(tags, "new"), "v1.1.0")
 
     def test_patch_uses_numeric_order_and_respects_manual_major_minor(self):
-        for tags, expected in (({"v1.0.9": "old", "v1.0.10": "old"}, "v1.0.11"),
+        for tags, expected in (({"v1.1.9": "old", "v1.1.10": "old"}, "v1.1.11"),
                                ({"v1.2.3": "old", "v1.1.99": "old"}, "v1.2.4"),
                                ({"v2.0.0": "old"}, "v2.0.1")):
             self.assertEqual(release.select_version(tags, "new"), expected)
@@ -66,16 +66,16 @@ class ReleaseVersionTest(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(script)], cwd=directory, env=env, check=True, capture_output=True, text=True)
                 self.assertEqual(result.stdout.strip(), expected)
                 self.assertEqual(output.read_text().splitlines()[-1], f"version={expected}")
-            select("v1.0.0")
-            git("tag", "-a", "v1.0.0", "-m", "fixture release")
-            select("v1.0.0")
+            select("v1.1.0")
+            git("tag", "-a", "v1.1.0", "-m", "fixture release")
+            select("v1.1.0")
             git("commit", "--allow-empty", "-m", "next fixture")
             git("update-ref", "refs/remotes/origin/main", "HEAD")
-            select("v1.0.1")
-            env["INPUT_VERSION"] = "v1.1.0"
-            select("v1.1.0")
+            select("v1.1.1")
+            env["INPUT_VERSION"] = "v1.2.0"
+            select("v1.2.0")
             # An old failed workflow must not publish old code with a new number.
-            git("checkout", "--detach", "v1.0.0")
+            git("checkout", "--detach", "v1.1.0")
             previous_output = output.read_text()
             result = subprocess.run([sys.executable, str(script)], cwd=directory, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)

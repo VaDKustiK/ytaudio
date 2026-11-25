@@ -165,6 +165,7 @@ async function refresh() {
     renderDiagnostics(data); renderJobs(jobs);
     if (typeof refreshAnalysis === "function") await refreshAnalysis();
     if (!releases || releases.checking) renderReleases(await api("/api/app-update"));
+    if (appInstall.running && !requestingInstall) renderAppInstall(await api("/api/app-install"));
   } catch { for (const view of downloaders) downloadFeedback(view, "Connection to the app was interrupted. Reconnecting…", true); }
   finally { polling = false; }
 }
@@ -214,8 +215,44 @@ async function openRelease(url) {
   try { await api("/api/open-release", "POST", {url}); }
   catch { window.open(url, "_blank", "noopener,noreferrer"); }
 }
+let appInstall = {}, requestingInstall = false;
+function renderAppInstall(status) {
+  appInstall = status;
+  const canInstall = Boolean(releases?.can_install);
+  const running = status.running || requestingInstall;
+  const message = status.message || (requestingInstall ? "Preparing the update…" : "");
+  const infoButton = $("#install-app-update"), bellButton = $("#bell-install-update");
+  infoButton.hidden = bellButton.hidden = !canInstall || running;
+  $("#notification-install").hidden = !canInstall && !message;
+  feedback("#app-install-message", message, Boolean(status.error));
+  $("#bell-install-message").textContent = message;
+  const progress = $("#app-install-progress");
+  progress.hidden = !running;
+  progress.value = status.percent ?? 0;
+}
+function confirmAppInstall() {
+  const dialog = $("#app-install-dialog");
+  if (dialog.open) return;
+  dialog.returnValue = "";
+  $("#app-install-title").textContent = `Install ${releases.latest}?`;
+  dialog.showModal();
+}
+$("#app-install-dialog").addEventListener("close", async event => {
+  if (event.target.returnValue !== "install" || requestingInstall || appInstall.running) return;
+  requestingInstall = true;
+  renderAppInstall({});
+  try { appInstall = await api("/api/app-install", "POST"); }
+  catch (error) { appInstall = {error: true, message: error.message}; }
+  finally { requestingInstall = false; renderAppInstall(appInstall); }
+});
+$("#install-app-update").addEventListener("click", confirmAppInstall);
+$("#bell-install-update").addEventListener("click", confirmAppInstall);
+
 function renderReleases(data) {
+  const firstStatus = !releases;
   releases = data;
+  if (!requestingInstall) renderAppInstall(data.install || {});
+  if (firstStatus && data.install?.reopened) showPage("info");
   $("#check-app-update").hidden = data.current === "dev";
   const message = data.checking ? "Checking releases…" : data.error || (data.ready ? `Version ${data.latest} is available.` : data.current === "dev" ? "Development build. App update checks are available in release builds." : data.latest ? "You’re up to date." : "No published releases yet.");
   $("#app-update-message").textContent = message;

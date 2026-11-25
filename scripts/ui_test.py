@@ -90,6 +90,33 @@ def test(binary):
                 expect(page.locator(".notification-item strong")).to_contain_text("<img")
                 assert page.locator("#notifications img").count()==0
                 page.keyboard.press("Escape");expect(page.locator("#notifications")).to_be_hidden()
+                # Opening the update dialog or cancelling it must never start a download.
+                update_requests = []
+                update_status = {"running": True, "percent": 47, "message": "Downloading v1.2.0…"}
+                def install_update(route):
+                    if route.request.method == "POST":
+                        update_requests.append(route.request.method)
+                    fulfill(route, update_status)
+                page.route("**/api/app-install", install_update)
+                page.route("**/api/app-update", lambda r: fulfill(r, {"current":"v1.1.0", "latest":"v1.2.0", "ready":True, "can_install":True, "notifications":[]}))
+                page.locator('[data-page="info"]').click()
+                page.locator("#check-app-update").click()
+                page.locator("#bell").click()
+                page.locator("#bell-install-update").click()
+                update_dialog = page.locator("#app-install-dialog")
+                expect(update_dialog).to_be_visible()
+                update_dialog.get_by_role("button", name="Cancel").click()
+                expect(update_dialog).to_be_hidden()
+                assert not update_requests
+                expect(page.locator("#notifications")).to_be_hidden()
+                page.locator("#install-app-update").click()
+                update_dialog.get_by_role("button", name="Install and restart").click()
+                expect(page.locator("#app-install-progress")).to_have_attribute("value", "47")
+                assert len(update_requests) == 1
+                update_status.update(running=False, error=True, message="Could not prepare the update.")
+                expect(page.locator("#app-install-message")).to_have_text("Could not prepare the update.")
+                expect(page.locator("#install-app-update")).to_be_visible()
+                page.locator('[data-page="downloader"]').click()
                 assert page.locator('#format option[value="mp4"], #default-format option[value="mp4"]').count()==0
                 for format in ("mp3","wav","flac","ogg"):
                     page.select_option("#format",format);assert page.locator("#format-help").inner_text()
@@ -184,6 +211,7 @@ def test(binary):
                 expect(page.locator("#app-version")).to_have_text("Development build")
                 expect(page.locator("#app-update-message")).to_have_text("Development build. App update checks are available in release builds.")
                 expect(page.locator("#check-app-update")).to_be_hidden()
+                expect(page.locator("#install-app-update")).to_be_hidden()
                 expect(page.locator("#notification-count")).to_be_hidden()
                 page.locator("#bell").click()
                 expect(page.locator("#notification-list")).to_contain_text("Development build")

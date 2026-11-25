@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 FIRST_RELEASE = (1, 0, 0)
+AUTOMATIC_FLOOR = (1, 1, 0)
 STABLE_TAG = re.compile(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", re.ASCII)
 
 
@@ -39,7 +40,7 @@ def select_version(tags, commit, requested="", ref_type="branch", ref_name="main
         if number < latest:
             raise ValueError("A newer stable tag exists; do not republish this older commit.")
     else:
-        number = FIRST_RELEASE if latest < FIRST_RELEASE else (*latest[:2], latest[2] + 1)
+        number = max(AUTOMATIC_FLOOR, (*latest[:2], latest[2] + 1))
     return "v" + ".".join(map(str, number))
 
 

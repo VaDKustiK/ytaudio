@@ -64,8 +64,12 @@ func (s *Server) analysisHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.appInstall.Running {
+			http.Error(w, "Wait for the app update to finish.", http.StatusConflict)
+			return
+		}
 		tools, mode := s.deps, s.cfg.AnalyzerPerformance
-		s.mu.RUnlock()
 		ffmpeg := ""
 		if tools != nil {
 			ffmpeg = tools.FFmpegPath()
@@ -171,6 +175,12 @@ func (s *Server) analysisInstall(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := s.analyzerManager()
 	if err == nil {
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		if s.appInstall.Running {
+			http.Error(w, "Wait for the app update to finish.", http.StatusConflict)
+			return
+		}
 		err = m.Install()
 	}
 	if err != nil {

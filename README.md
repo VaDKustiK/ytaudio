@@ -34,9 +34,12 @@ an account or subscription show an error instead of saving a preview.
 
 ## Updates and troubleshooting
 
-The bell checks for app releases at startup. Select a notification to open the
-release page and download the new installer. Updates are optional; automatic
-app replacement and restart are not implemented yet.
+The bell checks for releases at startup. Starting with v1.1.0, choose **Install
+update** from the bell or **Info** to download a verified update and reopen the
+app. Updates are optional. Older versions need one last manual installation.
+On Linux, portable copies update in place. System packages use PackageKit where
+available and may prompt for approval. On other setups, use the release link and
+your package manager.
 
 In **Info**, use **Update yt-dlp** for extraction problems, **Set up / repair**
 for broken or missing tools, and **Copy diagnostics** to report a problem.

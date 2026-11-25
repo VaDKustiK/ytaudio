@@ -63,6 +63,9 @@ type Server struct {
 	jobs                   map[string]*Job
 	queue                  *queue.Queue
 	releases               update.Info
+	updateTarget           update.Target
+	updateQuit             func()
+	appInstall             appInstallStatus
 	lastLog                string
 	ctx                    context.Context
 	cancel                 context.CancelFunc
@@ -199,6 +202,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/jobs", s.listJobs)
 	mux.HandleFunc("/api/jobs/", s.jobHandler)
 	mux.HandleFunc("/api/app-update", s.updates)
+	mux.HandleFunc("/api/app-install", s.installApp)
 	return mux
 }
 func method(w http.ResponseWriter, r *http.Request, allowed ...string) bool {
@@ -249,7 +253,7 @@ func (s *Server) readyLocked() bool {
 	return true
 }
 func (s *Server) busyLocked() bool {
-	if s.setup.Running {
+	if s.setup.Running || s.appInstall.Running {
 		return true
 	}
 	for _, j := range s.jobs {
@@ -483,7 +487,12 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	writeJSON(w, s.releases)
+	_, available := s.updateTarget.Asset(s.releases)
+	writeJSON(w, struct {
+		update.Info
+		CanInstall bool             `json:"can_install"`
+		Install    appInstallStatus `json:"install"`
+	}{s.releases, available && s.updateQuit != nil, s.appInstall})
 }
 func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 	if !method(w, r, "POST") {
@@ -510,6 +519,10 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.appInstall.Running {
+		http.Error(w, "Wait for the app update to finish.", http.StatusConflict)
+		return
+	}
 	if s.closed || s.setup.Running || !s.readyLocked() {
 		http.Error(w, "Set up the download tools in Info first.", http.StatusConflict)
 		return
